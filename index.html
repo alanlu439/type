@@ -5,104 +5,70 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Type is a one-page typewriter simulator with a visible animated keyboard, PDF import, and PDF export."
+      content="Type is a one-page 3D typewriter simulator with animated keys, striking typebars, sound effects, and PDF export."
     />
-    <title>Type - Typewriter Simulator</title>
+    <title>Type - 3D Typewriter Simulator</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="type-app" aria-labelledby="app-title">
-      <section class="typewriter" aria-label="Typewriter simulator">
-        <header class="top-bar" role="toolbar" aria-label="Typewriter controls">
-          <a class="brand" href="./" aria-label="Type home" id="app-title">Type</a>
+      <header class="top-bar" role="toolbar" aria-label="Type controls">
+        <a class="brand" href="./" id="app-title" aria-label="Type home">Type</a>
 
-          <div class="control-bank file-bank">
-            <input class="file-input" id="pdf-import" type="file" accept="application/pdf,.pdf" data-import-file />
-            <button class="metal-button" type="button" data-import>
-              <span class="folder-icon" aria-hidden="true"></span>
-              Import PDF
-            </button>
-            <button class="metal-button" type="button" data-export-pdf>
-              <span class="download-icon" aria-hidden="true"></span>
-              Export PDF
-            </button>
-          </div>
-
-          <button class="metal-button sound-toggle" type="button" data-sound-toggle aria-pressed="true">
+        <div class="toolbar-cluster">
+          <button class="control-button sound-toggle" type="button" data-sound-toggle aria-pressed="true">
             <span class="sound-icon" aria-hidden="true"></span>
             <span data-sound-label>Sound on</span>
             <span class="live-dot" aria-hidden="true"></span>
           </button>
 
-          <button class="metal-button" type="button" data-reset>
+          <button class="control-button" type="button" data-reset>
             <span class="reset-icon" aria-hidden="true"></span>
             Reset
           </button>
-
-          <div class="control-bank compact-tools">
-            <span class="tool-label">Ink</span>
-            <button class="swatch ink-swatch is-selected" type="button" data-ink="#201b17" style="--swatch: #201b17" aria-label="Black ink" aria-pressed="true"></button>
-            <button class="swatch ink-swatch" type="button" data-ink="#1d2b53" style="--swatch: #1d2b53" aria-label="Blue ink" aria-pressed="false"></button>
-            <button class="swatch ink-swatch" type="button" data-ink="#641b1f" style="--swatch: #641b1f" aria-label="Burgundy ink" aria-pressed="false"></button>
-          </div>
-
-          <div class="control-bank compact-tools">
-            <span class="tool-label">Paper</span>
-            <button class="swatch paper-swatch is-selected" type="button" data-paper="ivory" style="--swatch: #efe2ca" aria-label="Ivory paper" aria-pressed="true"></button>
-            <button class="swatch paper-swatch" type="button" data-paper="linen" style="--swatch: #dbc39c" aria-label="Linen paper" aria-pressed="false"></button>
-            <button class="swatch paper-swatch" type="button" data-paper="mist" style="--swatch: #d8d4c9" aria-label="Mist paper" aria-pressed="false"></button>
-          </div>
-
-          <div class="status-panel" aria-live="polite">
-            <span class="ready-state" data-ready-label>Ready</span>
-            <span class="word-count"><span>Words</span><strong data-word-count>0</strong></span>
-          </div>
-        </header>
-
-        <div class="machine-shell" data-machine>
-          <div class="paper-zone">
-            <div class="platen" aria-hidden="true">
-              <span class="platen-knob left"></span>
-              <span class="platen-knob right"></span>
-              <span class="ruler"></span>
-            </div>
-
-            <div class="paper-frame" data-carriage>
-              <label class="sr-only" for="writer-input">Type your page</label>
-              <div class="paper" data-paper-surface>
-                <div class="typed-output" data-output aria-hidden="true"></div>
-                <textarea
-                  id="writer-input"
-                  class="writer-input"
-                  data-input
-                  spellcheck="false"
-                  autocomplete="off"
-                  autocapitalize="sentences"
-                  aria-label="Type your page"
-                ></textarea>
-              </div>
-            </div>
-          </div>
-
-          <div class="ribbon-bridge" aria-hidden="true">
-            <span></span>
-          </div>
-
-          <div class="typebars" aria-hidden="true">
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
-          </div>
-
-          <div class="keyboard-deck" data-keyboard-deck aria-label="Visible typewriter keyboard"></div>
-
-          <div class="machine-lip" aria-hidden="true"></div>
         </div>
+
+        <div class="toolbar-cluster swatch-group" aria-label="Ink color">
+          <span class="tool-label">Ink</span>
+          <button class="swatch ink-swatch is-selected" type="button" data-ink="#201b17" style="--swatch: #201b17" aria-label="Black ink" aria-pressed="true"></button>
+          <button class="swatch ink-swatch" type="button" data-ink="#1d2b53" style="--swatch: #1d2b53" aria-label="Blue ink" aria-pressed="false"></button>
+          <button class="swatch ink-swatch" type="button" data-ink="#641b1f" style="--swatch: #641b1f" aria-label="Burgundy ink" aria-pressed="false"></button>
+        </div>
+
+        <div class="toolbar-cluster swatch-group" aria-label="Paper tone">
+          <span class="tool-label">Paper</span>
+          <button class="swatch paper-swatch is-selected" type="button" data-paper="ivory" style="--swatch: #efe2ca" aria-label="Ivory paper" aria-pressed="true"></button>
+          <button class="swatch paper-swatch" type="button" data-paper="linen" style="--swatch: #dbc39c" aria-label="Linen paper" aria-pressed="false"></button>
+          <button class="swatch paper-swatch" type="button" data-paper="mist" style="--swatch: #d8d4c9" aria-label="Mist paper" aria-pressed="false"></button>
+        </div>
+
+        <div class="toolbar-cluster status-panel" aria-live="polite">
+          <span class="ready-state" data-ready-label>Ready</span>
+          <span class="word-count"><span>Words</span><strong data-word-count>0</strong></span>
+        </div>
+
+        <button class="control-button export-button" type="button" data-export-pdf>
+          <span class="download-icon" aria-hidden="true"></span>
+          Export PDF
+        </button>
+      </header>
+
+      <section class="scene-stage" aria-label="3D typewriter simulator" data-stage>
+        <canvas class="typewriter-canvas" data-scene aria-hidden="true"></canvas>
+        <textarea
+          id="writer-input"
+          class="writer-input"
+          data-input
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="sentences"
+          aria-label="Type your page"
+        ></textarea>
+        <div class="sr-only" data-output aria-live="polite"></div>
       </section>
     </main>
 
-    <script src="assets/pdf.min.js"></script>
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>
