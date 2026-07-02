@@ -257,6 +257,10 @@ function buildLighting(scene) {
   const frontFill = new THREE.PointLight(0xf4c982, 2.8, 8);
   frontFill.position.set(0, 2.1, 4.9);
   scene.add(frontFill);
+
+  const keyGlow = new THREE.PointLight(0xffd8a6, 2.6, 5.4);
+  keyGlow.position.set(0, 1.75, 4.1);
+  scene.add(keyGlow);
 }
 
 function buildDesk(scene) {
@@ -460,10 +464,10 @@ function addTypebars(machine, brass, black) {
   const count = 31;
   for (let i = 0; i < count; i += 1) {
     const t = count === 1 ? 0 : i / (count - 1);
-    const spread = (t - 0.5) * 5.2;
-    const start = new THREE.Vector3(spread, 0.92, 0.78 + Math.abs(t - 0.5) * 0.52);
-    const rest = new THREE.Vector3(spread * 0.36, 1.78, -0.08);
-    const target = new THREE.Vector3((t - 0.5) * 0.18, 2.72, -0.52);
+    const spread = (t - 0.5) * 4.85;
+    const start = new THREE.Vector3(spread, 1.1, 0.35 + Math.abs(t - 0.5) * 0.18);
+    const rest = new THREE.Vector3(spread * 0.28, 1.77, -0.22);
+    const target = new THREE.Vector3((t - 0.5) * 0.16, 2.72, -0.52);
     const rod = cylinderBetween(start, rest, 0.017, brass);
     const slug = roundedBox(0.16, 0.12, 0.07, 0.02, black);
     slug.position.copy(rest);
@@ -476,7 +480,7 @@ function addTypebars(machine, brass, black) {
   }
 
   const basket = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.035, 12, 96, Math.PI), brass);
-  basket.position.set(0, 1.02, 0.63);
+  basket.position.set(0, 1.03, 0.35);
   basket.rotation.x = Math.PI * 0.53;
   basket.rotation.z = Math.PI;
   machine.add(basket);
@@ -488,48 +492,41 @@ function addKeys(machine, black, brass) {
     roughness: 0.38,
     metalness: 0.58
   });
-  const labelMaterial = new THREE.MeshStandardMaterial({
-    color: 0xf2dfb5,
-    roughness: 0.5,
-    metalness: 0.05
-  });
   const keySpacingX = 0.52;
-  const rowSpacing = 0.56;
-  const startZ = 2.74;
+  const rowGap = 0.09;
+  const rowZ = [1.12, 1.66, 2.2, 2.74, 3.24];
+  const rowY = [1.14, 1.08, 1.01, 0.94, 0.86];
+  const rowOffsets = [0, -0.06, -0.15, -0.04, 0];
 
   keyRows.forEach((row, rowIndex) => {
-    const rowWidth = row.reduce((sum, item) => sum + keyUnit(item[2]), 0) + (row.length - 1) * 0.08;
-    let cursor = -rowWidth / 2;
+    const rowWidth = row.reduce((sum, item) => sum + keyUnit(item[2]) * keySpacingX, 0) + (row.length - 1) * rowGap;
+    let cursor = -rowWidth / 2 + rowOffsets[rowIndex];
+
+    const rowSocket = roundedBox(rowWidth + 0.34, 0.09, 0.12, 0.045, black);
+    rowSocket.position.set(rowOffsets[rowIndex], rowY[rowIndex] - 0.32, rowZ[rowIndex] + 0.03);
+    rowSocket.rotation.x = -0.18;
+    machine.add(rowSocket);
+
     row.forEach(([value, label, variant]) => {
       const unit = keyUnit(variant);
       const width = unit * keySpacingX;
       const x = cursor + width / 2;
-      const z = startZ - rowIndex * rowSpacing;
+      const z = rowZ[rowIndex];
       const key = new THREE.Group();
-      key.position.set(x, 1.05 - rowIndex * 0.03, z);
+      key.position.set(x, rowY[rowIndex], z);
       key.rotation.x = -0.18;
       key.userData.homeY = key.position.y;
       key.userData.press = 0;
       key.userData.value = value;
       key.userData.label = label;
 
-      const cap = new THREE.Mesh(
-        new THREE.CylinderGeometry(width * 0.42, width * 0.46, 0.14, 36),
-        keyMaterial
-      );
-      cap.castShadow = true;
-      cap.receiveShadow = true;
-      key.add(cap);
-
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(width * 0.43, 0.025, 10, 36), brass);
-      rim.rotation.x = Math.PI / 2;
-      rim.position.y = 0.08;
-      key.add(rim);
+      addKeyCap(key, width, variant, keyMaterial, brass);
 
       if (label) {
-        const labelSprite = makeKeyLabel(label, width, labelMaterial);
-        labelSprite.position.y = 0.2;
-        key.add(labelSprite);
+        const labelMesh = makeKeyLabel(label, width, variant);
+        labelMesh.position.y = variant === "space" ? 0.184 : 0.176;
+        labelMesh.rotation.x = -Math.PI / 2;
+        key.add(labelMesh);
       }
 
       sceneState.keyObjects.push(key);
@@ -546,6 +543,73 @@ function addKeys(machine, black, brass) {
 
   registerKey(" ", sceneState.keys.get("Space"));
   registerKey("Delete", sceneState.keys.get("Backspace"));
+}
+
+function addKeyCap(key, width, variant, keyMaterial, brass) {
+  if (variant === "wide" || variant === "space") {
+    const stemCount = variant === "space" ? 3 : 2;
+    const span = variant === "space" ? width * 0.34 : width * 0.28;
+    for (let i = 0; i < stemCount; i += 1) {
+      const t = stemCount === 1 ? 0 : i / (stemCount - 1) - 0.5;
+      addKeyStem(key, t * span * 2, width, keyMaterial, brass);
+    }
+
+    const brassBase = roundedBox(width * 0.95, 0.1, variant === "space" ? 0.34 : 0.42, 0.18, brass);
+    brassBase.position.y = 0.02;
+    const top = roundedBox(width * 0.84, 0.12, variant === "space" ? 0.24 : 0.3, 0.13, keyMaterial);
+    top.position.y = 0.1;
+    key.add(brassBase, top);
+    return;
+  }
+
+  addKeyStem(key, 0, width, keyMaterial, brass);
+
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(width * 0.41, width * 0.46, 0.14, 48),
+    keyMaterial
+  );
+  cap.castShadow = true;
+  cap.receiveShadow = true;
+  key.add(cap);
+
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(width * 0.43, 0.027, 12, 48), brass);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = 0.085;
+  key.add(rim);
+
+  const glass = new THREE.Mesh(
+    new THREE.CylinderGeometry(width * 0.32, width * 0.33, 0.018, 48),
+    new THREE.MeshStandardMaterial({
+      color: 0x21180f,
+      roughness: 0.24,
+      metalness: 0.15,
+      transparent: true,
+      opacity: 0.94
+    })
+  );
+  glass.position.y = 0.095;
+  key.add(glass);
+}
+
+function addKeyStem(key, x, width, keyMaterial, brass) {
+  const stemRadius = Math.min(0.062, width * 0.12);
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(stemRadius, stemRadius * 1.08, 0.42, 18),
+    keyMaterial
+  );
+  stem.position.set(x, -0.17, 0);
+  stem.castShadow = true;
+  stem.receiveShadow = true;
+  key.add(stem);
+
+  const socket = new THREE.Mesh(
+    new THREE.CylinderGeometry(stemRadius * 1.65, stemRadius * 1.95, 0.055, 28),
+    brass
+  );
+  socket.position.set(x, -0.39, 0);
+  socket.castShadow = true;
+  socket.receiveShadow = true;
+  key.add(socket);
 }
 
 function addLevers(machine, brass, darkRubber) {
@@ -565,7 +629,7 @@ function addLevers(machine, brass, darkRubber) {
 
 function keyUnit(variant) {
   if (variant === "space") {
-    return 12;
+    return 10.2;
   }
   if (variant === "wide") {
     return 2.15;
@@ -573,38 +637,82 @@ function keyUnit(variant) {
   return 1;
 }
 
-function makeKeyLabel(label, width) {
-  const texture = new THREE.CanvasTexture(drawKeyLabel(label));
+function makeKeyLabel(label, width, variant) {
+  const texture = new THREE.CanvasTexture(drawKeyLabel(label, variant));
   texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.SpriteMaterial({
+  texture.anisotropy = 8;
+  const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
+    side: THREE.DoubleSide,
     depthWrite: false,
-    depthTest: true
+    depthTest: false,
+    toneMapped: false
   });
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(width * 0.66, width * 0.4, 1);
-  return sprite;
+  const labelWidth = variant === "wide" ? width * 0.86 : variant === "space" ? width * 0.84 : width * 0.88;
+  const labelDepth = variant === "wide" ? 0.34 : variant === "space" ? 0.26 : width * 0.88;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(labelWidth, labelDepth), material);
+  mesh.renderOrder = 10;
+  return mesh;
 }
 
-function drawKeyLabel(label) {
-  const size = 256;
+function drawKeyLabel(label, variant) {
+  const size = 512;
   const keyCanvas = document.createElement("canvas");
   keyCanvas.width = size;
   keyCanvas.height = size;
   const context = keyCanvas.getContext("2d");
   context.clearRect(0, 0, size, size);
+
+  context.save();
+  context.fillStyle = "rgba(26, 21, 15, 0.98)";
+  context.strokeStyle = "rgba(240, 202, 133, 0.76)";
+  context.lineWidth = 9;
+  if (variant === "wide" || variant === "space") {
+    roundedRectPath(context, 34, variant === "space" ? 150 : 122, size - 68, variant === "space" ? 212 : 268, 58);
+    context.fill();
+    context.stroke();
+  } else {
+    context.beginPath();
+    context.arc(size / 2, size / 2, 204, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
+  context.restore();
+
   context.fillStyle = "#fff1c8";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.shadowColor = "rgba(0, 0, 0, 0.55)";
-  context.shadowBlur = 7;
-  context.font = label.length > 5 ? "800 42px Georgia" : "800 72px Georgia";
+  context.shadowColor = "rgba(0, 0, 0, 0.75)";
+  context.shadowBlur = 10;
   const lines = label.split("\n");
+  const compact = label.length > 5;
+  if (variant === "wide") {
+    context.font = compact ? "800 108px Georgia" : "800 136px Georgia";
+  } else if (variant === "space") {
+    context.font = "800 72px Georgia";
+  } else {
+    context.font = lines.length > 1 ? "800 138px Georgia" : "800 242px Georgia";
+  }
+  const lineStep = variant === "wide" ? 108 : 152;
   lines.forEach((line, index) => {
-    context.fillText(line, size / 2, size / 2 + (index - (lines.length - 1) / 2) * 55);
+    context.fillText(line, size / 2, size / 2 + (index - (lines.length - 1) / 2) * lineStep);
   });
   return keyCanvas;
+}
+
+function roundedRectPath(context, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.lineTo(x + width - r, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + r);
+  context.lineTo(x + width, y + height - r);
+  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  context.lineTo(x + r, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - r);
+  context.lineTo(x, y + r);
+  context.quadraticCurveTo(x, y, x + r, y);
 }
 
 function roundedBox(width, height, depth, radius, material) {
@@ -835,10 +943,10 @@ function resizeScene() {
   sceneState.camera.fov = isMobile ? 40 : isCompact ? 36 : 32;
   sceneState.camera.lookAt(0, isMobile ? 0.95 : 0.9, isMobile ? 1.0 : 0.55);
   if (sceneState.machine) {
-    const scale = isMobile ? Math.max(0.52, Math.min(0.62, width / 620)) : isCompact ? 0.76 : 0.82;
+    const scale = isMobile ? Math.max(0.42, Math.min(0.5, width / 820)) : isCompact ? 0.76 : 0.82;
     sceneState.machine.scale.setScalar(scale);
-    sceneState.baseMachineY = isMobile ? -0.78 : isCompact ? -0.66 : -0.54;
-    sceneState.baseMachineZ = isMobile ? 1.24 : isCompact ? 0.78 : 0.52;
+    sceneState.baseMachineY = isMobile ? -0.58 : isCompact ? -0.66 : -0.54;
+    sceneState.baseMachineZ = isMobile ? 1.32 : isCompact ? 0.78 : 0.52;
   }
   sceneState.camera.updateProjectionMatrix();
 }
