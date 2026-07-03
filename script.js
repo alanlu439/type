@@ -36,6 +36,17 @@ const paperTones = {
   mist: { base: "#d8d4c9", edge: "#b1ab9b", grid: "rgba(68, 64, 58, 0.08)" }
 };
 
+const paperMetrics = {
+  canvasWidth: 1536,
+  canvasHeight: 768,
+  planeWidth: 7.8,
+  planeHeight: 3.2,
+  marginX: 180,
+  printLineY: 450,
+  lineHeight: 54,
+  charPitch: 21
+};
+
 const keyRows = [
   [
     ["`", "~\n`"], ["1", "!\n1"], ["2", "@\n2"], ["3", "#\n3"], ["4", "$\n4"], ["5", "%\n5"],
@@ -120,7 +131,7 @@ input.value = seedText;
 input.setSelectionRange(input.value.length, input.value.length);
 syncCarriageFromInput();
 renderPage();
-setSidebarExpanded(window.innerWidth >= 1120, { focus: false });
+setSidebarExpanded(true, { focus: false });
 input.focus({ preventScroll: true });
 
 stage.addEventListener("pointerdown", () => {
@@ -357,10 +368,12 @@ function buildTypewriter(scene) {
   addBody(machine, black, wornBlack, brass);
   addPlaten(machine, darkRubber, brass);
   addPaper(machine);
+  addCarriageDetails(brass, darkRubber, black);
   addRibbon(machine, black, brass, ribbonRed);
   addTypebars(machine, brass, black);
   addKeys(machine, black, brass);
   addLevers(machine, brass, darkRubber);
+  addMachineDetails(machine, black, wornBlack, brass, darkRubber);
 }
 
 function addBody(machine, black, wornBlack, brass) {
@@ -440,8 +453,8 @@ function addPlaten(machine, darkRubber, brass) {
 
 function addPaper(machine) {
   const paperCanvas = document.createElement("canvas");
-  paperCanvas.width = 1536;
-  paperCanvas.height = 768;
+  paperCanvas.width = paperMetrics.canvasWidth;
+  paperCanvas.height = paperMetrics.canvasHeight;
   const paperContext = paperCanvas.getContext("2d");
   const paperTexture = new THREE.CanvasTexture(paperCanvas);
   paperTexture.colorSpace = THREE.SRGBColorSpace;
@@ -454,7 +467,7 @@ function addPaper(machine) {
     side: THREE.DoubleSide
   });
 
-  const geometry = new THREE.PlaneGeometry(7.8, 3.2, 32, 4);
+  const geometry = new THREE.PlaneGeometry(paperMetrics.planeWidth, paperMetrics.planeHeight, 32, 4);
   const position = geometry.attributes.position;
   for (let i = 0; i < position.count; i += 1) {
     const y = position.getY(i);
@@ -471,6 +484,75 @@ function addPaper(machine) {
   sceneState.paperContext = paperContext;
   sceneState.paperTexture = paperTexture;
   sceneState.carriage.add(paper);
+}
+
+function addCarriageDetails(brass, darkRubber, black) {
+  const carriage = sceneState.carriage;
+  if (!carriage) {
+    return;
+  }
+
+  const paperBail = cylinderBetween(
+    new THREE.Vector3(-3.65, 2.72, -0.32),
+    new THREE.Vector3(3.65, 2.72, -0.32),
+    0.018,
+    brass
+  );
+  carriage.add(paperBail);
+
+  [-2.5, 0, 2.5].forEach((x) => {
+    const pressureRoller = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.32, 24), darkRubber);
+    pressureRoller.rotation.x = Math.PI / 2;
+    pressureRoller.position.set(x, 2.72, -0.29);
+    pressureRoller.castShadow = true;
+    carriage.add(pressureRoller);
+
+    const rollerBracket = roundedBox(0.18, 0.035, 0.08, 0.025, brass);
+    rollerBracket.position.set(x, 2.61, -0.33);
+    rollerBracket.rotation.x = -0.18;
+    carriage.add(rollerBracket);
+  });
+
+  [-3.85, 3.85].forEach((x) => {
+    const bailArm = cylinderBetween(
+      new THREE.Vector3(x, 2.36, -0.34),
+      new THREE.Vector3(x, 3.03, -0.34),
+      0.015,
+      brass
+    );
+    carriage.add(bailArm);
+
+    const paperClamp = roundedBox(0.2, 0.12, 0.12, 0.035, brass);
+    paperClamp.position.set(x, 3.08, -0.36);
+    paperClamp.castShadow = true;
+    carriage.add(paperClamp);
+  });
+
+  const paperScale = roundedBox(7.2, 0.055, 0.08, 0.02, brass);
+  paperScale.position.set(0, 3.36, -0.42);
+  carriage.add(paperScale);
+
+  for (let i = 0; i <= 48; i += 1) {
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, i % 6 === 0 ? 0.1 : 0.055, 0.018), black);
+    tick.position.set(-3.43 + i * 0.143, 3.42, -0.36);
+    carriage.add(tick);
+  }
+
+  [-2.98, 2.98].forEach((x) => {
+    const marginStop = roundedBox(0.22, 0.18, 0.18, 0.045, brass);
+    marginStop.position.set(x, 2.18, -0.78);
+    marginStop.castShadow = true;
+    carriage.add(marginStop);
+  });
+
+  const carriageRack = cylinderBetween(
+    new THREE.Vector3(-4.1, 2.18, -0.82),
+    new THREE.Vector3(4.1, 2.18, -0.82),
+    0.024,
+    brass
+  );
+  carriage.add(carriageRack);
+
 }
 
 function addRibbon(machine, black, brass, ribbonRed) {
@@ -673,6 +755,59 @@ function addLevers(machine, brass, darkRubber) {
   machine.add(handle);
 }
 
+function addMachineDetails(machine, black, wornBlack, brass, darkRubber) {
+  const badge = makePlateLabel("TYPE", 1.12, 0.34);
+  badge.position.set(0, 0.68, 3.83);
+  machine.add(badge);
+
+  const frontRod = cylinderBetween(
+    new THREE.Vector3(-3.95, 0.68, 3.86),
+    new THREE.Vector3(3.95, 0.68, 3.86),
+    0.017,
+    brass
+  );
+  machine.add(frontRod);
+
+  [-4.1, -1.05, 1.05, 4.1].forEach((x) => {
+    const screw = makeScrewHead(0.08, brass, black);
+    screw.position.set(x, 0.5, 3.86);
+    screw.rotation.x = Math.PI / 2;
+    machine.add(screw);
+  });
+
+  [-3.82, 3.82].forEach((x) => {
+    [-0.36, 3.28].forEach((z) => {
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.16, 28), darkRubber);
+      foot.position.set(x, -0.46, z);
+      foot.castShadow = true;
+      foot.receiveShadow = true;
+      machine.add(foot);
+    });
+  });
+
+  const segmentComb = roundedBox(3.85, 0.08, 0.16, 0.04, brass);
+  segmentComb.position.set(0, 1.12, 0.52);
+  segmentComb.rotation.x = -0.12;
+  machine.add(segmentComb);
+
+  for (let i = 0; i < 27; i += 1) {
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.13, 0.18), wornBlack);
+    slot.position.set(-1.82 + i * 0.14, 1.17, 0.58);
+    slot.rotation.x = -0.12;
+    machine.add(slot);
+  }
+
+  [-2.95, 2.95].forEach((x) => {
+    const ribbonFork = cylinderBetween(
+      new THREE.Vector3(x, 1.56, 0.35),
+      new THREE.Vector3(x * 0.36, 1.86, -0.34),
+      0.012,
+      brass
+    );
+    machine.add(ribbonFork);
+  });
+}
+
 function keyUnit(variant) {
   if (variant === "space") {
     return 10.2;
@@ -745,6 +880,48 @@ function drawKeyLabel(label, variant) {
     context.fillText(line, size / 2, size / 2 + (index - (lines.length - 1) / 2) * lineStep);
   });
   return keyCanvas;
+}
+
+function makePlateLabel(text, width, height) {
+  const plateCanvas = document.createElement("canvas");
+  plateCanvas.width = 512;
+  plateCanvas.height = 180;
+  const context = plateCanvas.getContext("2d");
+  const gradient = context.createLinearGradient(0, 0, 0, plateCanvas.height);
+  gradient.addColorStop(0, "#f1c27c");
+  gradient.addColorStop(0.55, "#c9934e");
+  gradient.addColorStop(1, "#7e5528");
+  context.fillStyle = gradient;
+  roundedRectPath(context, 18, 18, plateCanvas.width - 36, plateCanvas.height - 36, 34);
+  context.fill();
+  context.strokeStyle = "rgba(42, 28, 14, 0.58)";
+  context.lineWidth = 8;
+  context.stroke();
+  context.fillStyle = "#2a1a0d";
+  context.font = "800 86px Georgia, serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, plateCanvas.width / 2, plateCanvas.height / 2 + 2);
+
+  const texture = new THREE.CanvasTexture(plateCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    toneMapped: false
+  });
+  return new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+}
+
+function makeScrewHead(radius, brass, black) {
+  const group = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 0.032, 28), brass);
+  head.castShadow = true;
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(radius * 1.45, radius * 0.18, radius * 0.28), black);
+  slot.position.y = 0.02;
+  group.add(head, slot);
+  return group;
 }
 
 function roundedRectPath(context, x, y, width, height, radius) {
@@ -1126,13 +1303,14 @@ function drawPaper() {
   context.font = "700 35px Courier New, monospace";
   const paperLines = input.value ? input.value.split(/\r?\n/) : [""];
   const firstVisibleLine = Math.max(0, typewriterState.row - 8);
-  const lines = paperLines.slice(firstVisibleLine, firstVisibleLine + 9);
-  const marginX = 180;
-  const marginY = 138;
-  const lineHeight = 54;
-  lines.slice(0, 9).forEach((line, lineIndex) => {
-    let x = marginX;
-    const y = marginY + lineIndex * lineHeight;
+  const lastVisibleLine = Math.min(paperLines.length, firstVisibleLine + 12);
+  for (let lineIndex = firstVisibleLine; lineIndex < lastVisibleLine; lineIndex += 1) {
+    const line = paperLines[lineIndex] || "";
+    let x = paperMetrics.marginX;
+    const y = paperMetrics.printLineY + (lineIndex - typewriterState.row) * paperMetrics.lineHeight;
+    if (y < -paperMetrics.lineHeight || y > height) {
+      continue;
+    }
     [...line].forEach((char, charIndex) => {
       context.globalAlpha = 0.78 + Math.abs(jitter(charIndex + lineIndex * 31, 0.18));
       context.save();
@@ -1140,16 +1318,14 @@ function drawPaper() {
       context.rotate((jitter(charIndex + 29, 0.45) * Math.PI) / 180);
       context.fillText(char, 0, 0);
       context.restore();
-      x += context.measureText(char).width || 20;
+      x += paperMetrics.charPitch;
     });
-  });
+  }
   context.globalAlpha = 1;
 
   if (document.activeElement === input || input.value) {
-    const caretLine = Math.max(0, Math.min(typewriterState.row - firstVisibleLine, 8));
-    const caretText = (paperLines[typewriterState.row] || "").slice(0, Math.max(0, Math.floor(typewriterState.col)));
-    const caretX = marginX + context.measureText(caretText).width + 7;
-    const caretY = marginY + caretLine * lineHeight + 3;
+    const caretX = paperMetrics.marginX + typewriterState.col * paperMetrics.charPitch + 7;
+    const caretY = paperMetrics.printLineY + 3;
     context.fillRect(caretX, caretY, 5, 42);
   }
 
@@ -1158,7 +1334,10 @@ function drawPaper() {
 
 function updateCarriage() {
   const column = currentColumn();
-  sceneState.targetCarriageShift = Math.max(-0.42, Math.min(0.42, (column - 28) * -0.016));
+  const marginLocalX = (paperMetrics.marginX / paperMetrics.canvasWidth - 0.5) * paperMetrics.planeWidth;
+  const characterTravel = (paperMetrics.charPitch / paperMetrics.canvasWidth) * paperMetrics.planeWidth;
+  const targetShift = -marginLocalX - column * characterTravel;
+  sceneState.targetCarriageShift = Math.max(-3.18, Math.min(3.18, targetShift));
 }
 
 function animate() {
@@ -1238,16 +1417,15 @@ function resizeScene() {
   const isCompact = width < 1120;
   const isMobile = width < 760;
   const zoom = sceneState.zoom;
-  sceneState.camera.position.set(0, isMobile ? 4.85 : isCompact ? 5.55 : 5.75, (isMobile ? 15.1 : isCompact ? 14.2 : 13.6) * zoom);
-  sceneState.camera.fov = isMobile ? 40 : isCompact ? 36 : 32;
-  sceneState.camera.lookAt(0, isMobile ? 0.95 : 0.9, isMobile ? 1.0 : 0.55);
+  sceneState.camera.position.set(0, isMobile ? 5.2 : isCompact ? 5.75 : 6.0, (isMobile ? 16.2 : isCompact ? 15.4 : 15.0) * zoom);
+  sceneState.camera.fov = isMobile ? 40 : isCompact ? 36 : 33;
+  sceneState.camera.lookAt(0, isMobile ? 1.25 : 1.2, isMobile ? 1.15 : 0.65);
   if (sceneState.machine) {
-    const scale = isMobile ? Math.max(0.42, Math.min(0.5, width / 820)) : isCompact ? 0.76 : 0.82;
-    const railVisible = !document.body.classList.contains("controls-hidden");
+    const scale = isMobile ? Math.max(0.38, Math.min(0.46, width / 860)) : isCompact ? 0.66 : 0.76;
     sceneState.machine.scale.setScalar(scale);
-    sceneState.baseMachineX = !isMobile && railVisible ? 0.85 : 0;
-    sceneState.baseMachineY = isMobile ? -0.58 : isCompact ? -0.66 : -0.54;
-    sceneState.baseMachineZ = isMobile ? 1.32 : isCompact ? 0.78 : 0.52;
+    sceneState.baseMachineX = 0;
+    sceneState.baseMachineY = isMobile ? -0.06 : isCompact ? -0.14 : -0.18;
+    sceneState.baseMachineZ = isMobile ? 1.42 : isCompact ? 0.92 : 0.72;
   }
   sceneState.camera.updateProjectionMatrix();
 }
@@ -1434,7 +1612,7 @@ function setSidebarExpanded(expanded, options = {}) {
     button.setAttribute("aria-expanded", String(expanded));
     const label = button.querySelector("[data-sidebar-label]");
     if (label) {
-      label.textContent = expanded ? "Hide sidebar" : "Show controls";
+      label.textContent = expanded ? "Hide shortcuts" : "Show shortcuts";
     }
   });
   resizeScene();
@@ -1650,7 +1828,7 @@ function canPlay() {
 }
 
 function currentColumn() {
-  return Math.max(0, Math.floor(typewriterState.col));
+  return Math.max(0, typewriterState.col);
 }
 
 function jitter(index, amount) {
