@@ -49,6 +49,16 @@ const paperMetrics = {
   charPitch: 28
 };
 
+const printHeadMetrics = {
+  glyphCenterX: -0.22,
+  glyphCenterY: 32,
+  contactY: 3.24,
+  contactZ: -0.49,
+  ribbonRestY: 1.9,
+  ribbonRestZ: -0.48,
+  escapementDelay: 118
+};
+
 const keyRows = [
   [
     ["`", "~\n`"], ["1", "!\n1"], ["2", "@\n2"], ["3", "#\n3"], ["4", "$\n4"], ["5", "%\n5"],
@@ -107,7 +117,9 @@ const sceneState = {
   carriageShift: 0,
   targetCarriageShift: 0,
   carriageJerk: 0,
+  carriageHoldUntil: 0,
   paperImpact: 0,
+  paperImpactStart: 0,
   ribbonPulse: 0,
   returnSweep: 0,
   baseMachineY: -0.08,
@@ -587,8 +599,12 @@ function addRibbon(machine, black, brass, ribbonRed) {
   const rightRibbon = makeRibbonSegment(new THREE.Vector3(3.55, 1.46, 0.3), new THREE.Vector3(0.1, 1.92, -0.55), 0.09, ribbonRed);
   machine.add(leftRibbon, rightRibbon);
 
-  const ribbonGuide = roundedBox(0.74, 0.12, 0.16, 0.04, brass);
-  ribbonGuide.position.set(0, 1.9, -0.48);
+  const ribbonGuide = new THREE.Group();
+  const guideFrame = roundedBox(0.82, 0.12, 0.16, 0.04, brass);
+  const ribbonWindow = roundedBox(0.7, 0.045, 0.045, 0.018, ribbonRed);
+  ribbonWindow.position.set(0, 0.012, 0.045);
+  ribbonGuide.add(guideFrame, ribbonWindow);
+  ribbonGuide.position.set(0, printHeadMetrics.ribbonRestY, printHeadMetrics.ribbonRestZ);
   ribbonGuide.rotation.x = -0.12;
   sceneState.ribbonGuide = ribbonGuide;
   machine.add(ribbonGuide);
@@ -601,7 +617,7 @@ function addTypebars(machine, brass, black) {
     const spread = (t - 0.5) * 4.85;
     const start = new THREE.Vector3(spread, 1.1, 0.35 + Math.abs(t - 0.5) * 0.18);
     const rest = new THREE.Vector3(spread * 0.28, 1.77, -0.22);
-    const target = new THREE.Vector3((t - 0.5) * 0.16, 2.72, -0.52);
+    const target = getPrintHeadTarget();
     const rod = cylinderBetween(start, rest, 0.017, brass);
     const slug = roundedBox(0.16, 0.12, 0.07, 0.02, black);
     slug.position.copy(rest);
@@ -658,7 +674,7 @@ function addKeys(machine, black, brass) {
 
       if (label) {
         const labelMesh = makeKeyLabel(label, width, variant);
-        labelMesh.position.y = variant === "space" ? 0.184 : 0.176;
+        labelMesh.position.y = variant === "space" || variant === "wide" ? 0.164 : 0.108;
         labelMesh.rotation.x = -Math.PI / 2;
         key.add(labelMesh);
       }
@@ -835,11 +851,11 @@ function makeKeyLabel(label, width, variant) {
     transparent: true,
     side: THREE.DoubleSide,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     toneMapped: false
   });
-  const labelWidth = variant === "wide" ? width * 0.86 : variant === "space" ? width * 0.84 : width * 0.88;
-  const labelDepth = variant === "wide" ? 0.34 : variant === "space" ? 0.26 : width * 0.88;
+  const labelWidth = variant === "wide" ? width * 0.78 : variant === "space" ? width * 0.78 : width * 0.62;
+  const labelDepth = variant === "wide" ? 0.3 : variant === "space" ? 0.23 : width * 0.62;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(labelWidth, labelDepth), material);
   mesh.renderOrder = 10;
   return mesh;
@@ -1237,10 +1253,10 @@ function strikeMachine(value) {
     key.userData.press = 1;
   }
 
+  const now = performance.now();
   const index = keyIndexForValue(normalized);
   const primary = sceneState.typebars[index % sceneState.typebars.length];
   if (primary) {
-    const now = performance.now();
     primary.strikeStart = now;
     primary.intensity = 1;
     const previous = sceneState.typebars[(index - 1 + sceneState.typebars.length) % sceneState.typebars.length];
@@ -1252,9 +1268,16 @@ function strikeMachine(value) {
     sceneState.lastStrike = now;
   }
 
-  sceneState.paperImpact = 1;
+  const printableStrike = String(normalized).length === 1 && normalized !== " ";
+  if (printableStrike) {
+    sceneState.carriageHoldUntil = Math.max(sceneState.carriageHoldUntil, now + printHeadMetrics.escapementDelay);
+    sceneState.paperImpactStart = now + 82;
+    window.setTimeout(drawPaper, printHeadMetrics.escapementDelay + 26);
+  } else {
+    sceneState.paperImpact = 1;
+  }
   sceneState.ribbonPulse = 1;
-  sceneState.carriageJerk += normalized === "Enter" ? -0.34 : 0.055;
+  sceneState.carriageJerk += normalized === "Enter" ? -0.34 : printableStrike ? 0.014 : 0.055;
 }
 
 function keyIndexForValue(value) {
@@ -1264,6 +1287,26 @@ function keyIndexForValue(value) {
     total += stringValue.charCodeAt(i);
   }
   return Math.abs(total || 7);
+}
+
+function paperCanvasXToLocal(canvasX) {
+  return (canvasX / paperMetrics.canvasWidth - 0.5) * paperMetrics.planeWidth;
+}
+
+function paperCanvasYToLocal(canvasY) {
+  return (canvasY / paperMetrics.canvasHeight - 0.5) * paperMetrics.planeHeight;
+}
+
+function strikeCanvasX(column = currentColumn()) {
+  return paperMetrics.marginX + column * paperMetrics.charPitch + paperMetrics.charPitch * printHeadMetrics.glyphCenterX;
+}
+
+function strikeCanvasY() {
+  return paperMetrics.printLineY + printHeadMetrics.glyphCenterY;
+}
+
+function getPrintHeadTarget() {
+  return new THREE.Vector3(0, printHeadMetrics.contactY, printHeadMetrics.contactZ);
 }
 
 function renderPage() {
@@ -1331,9 +1374,9 @@ function drawPaper() {
   }
   context.globalAlpha = 1;
 
-  if (document.activeElement === input || input.value) {
-    const caretX = paperMetrics.marginX + typewriterState.col * paperMetrics.charPitch + 9;
-    const caretY = paperMetrics.printLineY + 3;
+  if ((document.activeElement === input || input.value) && performance.now() >= sceneState.carriageHoldUntil) {
+    const caretX = strikeCanvasX(typewriterState.col) - 3.5;
+    const caretY = strikeCanvasY() - 28;
     context.fillRect(caretX, caretY, 7, 56);
   }
 
@@ -1342,9 +1385,7 @@ function drawPaper() {
 
 function updateCarriage() {
   const column = currentColumn();
-  const marginLocalX = (paperMetrics.marginX / paperMetrics.canvasWidth - 0.5) * paperMetrics.planeWidth;
-  const characterTravel = (paperMetrics.charPitch / paperMetrics.canvasWidth) * paperMetrics.planeWidth;
-  const targetShift = -marginLocalX - column * characterTravel;
+  const targetShift = -paperCanvasXToLocal(strikeCanvasX(column));
   sceneState.targetCarriageShift = Math.max(-3.18, Math.min(3.18, targetShift));
 }
 
@@ -1354,8 +1395,14 @@ function animate() {
   const now = performance.now();
   const time = now * 0.001;
 
-  state.carriageShift += (state.targetCarriageShift - state.carriageShift) * 0.16;
+  if (now >= state.carriageHoldUntil) {
+    state.carriageShift += (state.targetCarriageShift - state.carriageShift) * 0.16;
+  }
   state.carriageJerk *= 0.72;
+  if (state.paperImpactStart && now >= state.paperImpactStart) {
+    state.paperImpact = Math.max(state.paperImpact, 1);
+    state.paperImpactStart = 0;
+  }
   state.paperImpact *= 0.72;
   state.ribbonPulse *= 0.68;
   state.returnSweep *= 0.82;
@@ -1407,8 +1454,10 @@ function animate() {
   }
 
   if (state.ribbonGuide) {
-    state.ribbonGuide.position.y = 1.9 + state.ribbonPulse * 0.28;
-    state.ribbonGuide.position.z = -0.48 - state.ribbonPulse * 0.05;
+    const printTarget = getPrintHeadTarget();
+    const lift = Math.min(1, state.ribbonPulse * 1.18);
+    state.ribbonGuide.position.y = printHeadMetrics.ribbonRestY + (printTarget.y - 0.02 - printHeadMetrics.ribbonRestY) * lift;
+    state.ribbonGuide.position.z = printHeadMetrics.ribbonRestZ + (printTarget.z + 0.04 - printHeadMetrics.ribbonRestZ) * lift;
   }
 
   if (state.camera) {
