@@ -168,6 +168,12 @@ a {
   color: rgba(255, 248, 234, 0.55);
 }
 
+.focus-toggle[aria-pressed="true"] {
+  color: #f6d19a;
+  border-color: rgba(216, 173, 104, 0.66);
+  background: linear-gradient(180deg, rgba(65, 47, 32, 0.88), rgba(20, 15, 11, 0.94));
+}
+
 .live-dot {
   width: 0.48rem;
   height: 0.48rem;
@@ -416,7 +422,8 @@ body.controls-hidden .rail-peek {
 .folder-icon,
 .download-icon,
 .sound-icon,
-.reset-icon {
+.reset-icon,
+.focus-icon {
   position: relative;
   display: inline-block;
   flex: 0 0 auto;
@@ -487,6 +494,25 @@ body.controls-hidden .rail-peek {
   border-top: 2px solid currentColor;
   border-right: 2px solid currentColor;
   transform: rotate(25deg);
+}
+
+.focus-icon::before {
+  position: absolute;
+  inset: 0.08rem;
+  content: "";
+  border: 2px solid currentColor;
+  border-radius: 3px;
+}
+
+.focus-icon::after {
+  position: absolute;
+  left: 0.39rem;
+  top: 0.39rem;
+  width: 0.22rem;
+  height: 0.22rem;
+  content: "";
+  border-radius: 50%;
+  background: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -595,7 +621,7 @@ body.controls-hidden .rail-peek {
 
   .toolbar-cluster:nth-of-type(1) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .control-button {

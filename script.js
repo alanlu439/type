@@ -8,6 +8,8 @@ const wordCount = document.querySelector("[data-word-count]");
 const readyLabel = document.querySelector("[data-ready-label]");
 const exportPdfButton = document.querySelector("[data-export-pdf]");
 const resetButton = document.querySelector("[data-reset]");
+const focusButton = document.querySelector("[data-focus-mode]");
+const focusLabel = document.querySelector("[data-focus-label]");
 const clearPageButton = document.querySelector("[data-clear-page]");
 const ribbonCycleButton = document.querySelector("[data-ribbon-cycle]");
 const zoomOutButton = document.querySelector("[data-zoom-out]");
@@ -105,21 +107,22 @@ const sceneState = {
   carriageShift: 0,
   targetCarriageShift: 0,
   carriageJerk: 0,
-  deckJolt: 0,
-  targetDeckJolt: 0,
   paperImpact: 0,
   ribbonPulse: 0,
   returnSweep: 0,
   baseMachineY: -0.08,
   baseMachineZ: 0,
   zoom: 1,
+  focusMode: false,
   viewRotation: 0,
   targetViewRotation: 0,
+  cameraTargetPosition: new THREE.Vector3(0, 5.5, 10.6),
+  cameraLookAt: new THREE.Vector3(0, 1.1, 0),
+  cameraTargetLookAt: new THREE.Vector3(0, 1.1, 0),
+  cameraTargetFov: 32,
   ink: "#201b17",
   paperTone: "ivory",
-  lastStrike: 0,
-  pointer: { x: 0, y: 0 },
-  targetPointer: { x: 0, y: 0 }
+  lastStrike: 0
 };
 
 let audioContext;
@@ -131,18 +134,13 @@ input.value = seedText;
 input.setSelectionRange(input.value.length, input.value.length);
 syncCarriageFromInput();
 renderPage();
+updateFocusButton();
 setSidebarExpanded(true, { focus: false });
 input.focus({ preventScroll: true });
 
 stage.addEventListener("pointerdown", () => {
   ensureAudio();
   input.focus({ preventScroll: true });
-});
-
-stage.addEventListener("pointermove", (event) => {
-  const rect = stage.getBoundingClientRect();
-  sceneState.targetPointer.x = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-  sceneState.targetPointer.y = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
 });
 
 input.addEventListener("focus", () => setStatus("Writing"));
@@ -180,6 +178,7 @@ window.addEventListener("keyup", releaseTypewriterModifier);
 
 resetButton.addEventListener("click", () => clearPage());
 clearPageButton?.addEventListener("click", () => clearPage());
+focusButton?.addEventListener("click", () => setFocusMode(!sceneState.focusMode));
 
 exportPdfButton.addEventListener("click", () => {
   const pdf = buildPdf(input.value || " ");
@@ -274,6 +273,10 @@ function initScene() {
   sceneState.renderer = renderer;
   sceneState.scene = scene;
   sceneState.camera = camera;
+  sceneState.cameraTargetPosition.copy(camera.position);
+  sceneState.cameraLookAt.set(0, 1.1, 0);
+  sceneState.cameraTargetLookAt.copy(sceneState.cameraLookAt);
+  sceneState.cameraTargetFov = camera.fov;
 
   buildLighting(scene);
   buildDesk(scene);
@@ -1245,10 +1248,6 @@ function strikeMachine(value) {
   sceneState.paperImpact = 1;
   sceneState.ribbonPulse = 1;
   sceneState.carriageJerk += normalized === "Enter" ? -0.34 : 0.055;
-  sceneState.targetDeckJolt = 1;
-  window.setTimeout(() => {
-    sceneState.targetDeckJolt = 0;
-  }, 90);
 }
 
 function keyIndexForValue(value) {
@@ -1346,10 +1345,7 @@ function animate() {
   const now = performance.now();
   const time = now * 0.001;
 
-  state.pointer.x += (state.targetPointer.x - state.pointer.x) * 0.04;
-  state.pointer.y += (state.targetPointer.y - state.pointer.y) * 0.04;
   state.carriageShift += (state.targetCarriageShift - state.carriageShift) * 0.16;
-  state.deckJolt += (state.targetDeckJolt - state.deckJolt) * 0.2;
   state.carriageJerk *= 0.72;
   state.paperImpact *= 0.72;
   state.ribbonPulse *= 0.68;
@@ -1357,10 +1353,10 @@ function animate() {
 
   if (state.machine) {
     state.viewRotation += (state.targetViewRotation - state.viewRotation) * 0.12;
-    state.machine.rotation.y = state.viewRotation + state.pointer.x * 0.035;
-    state.machine.rotation.x = -0.015 - state.pointer.y * 0.018;
+    state.machine.rotation.y = state.viewRotation;
+    state.machine.rotation.x = -0.015;
     state.machine.position.x = state.baseMachineX;
-    state.machine.position.y = state.baseMachineY - state.deckJolt * 0.025;
+    state.machine.position.y = state.baseMachineY;
     state.machine.position.z = state.baseMachineZ;
   }
 
@@ -1370,7 +1366,7 @@ function animate() {
 
   state.keyObjects.forEach((key) => {
     key.userData.press *= 0.72;
-    key.position.y = key.userData.homeY - key.userData.press * 0.16 - state.deckJolt * 0.015;
+    key.position.y = key.userData.homeY - key.userData.press * 0.16;
   });
 
   state.typebars.forEach((arm) => {
@@ -1406,6 +1402,14 @@ function animate() {
     state.ribbonGuide.position.z = -0.48 - state.ribbonPulse * 0.05;
   }
 
+  if (state.camera) {
+    state.camera.position.lerp(state.cameraTargetPosition, 0.12);
+    state.cameraLookAt.lerp(state.cameraTargetLookAt, 0.12);
+    state.camera.fov += (state.cameraTargetFov - state.camera.fov) * 0.12;
+    state.camera.lookAt(state.cameraLookAt);
+    state.camera.updateProjectionMatrix();
+  }
+
   state.renderer.render(state.scene, state.camera);
 }
 
@@ -1417,9 +1421,15 @@ function resizeScene() {
   const isCompact = width < 1120;
   const isMobile = width < 760;
   const zoom = sceneState.zoom;
-  sceneState.camera.position.set(0, isMobile ? 5.2 : isCompact ? 5.75 : 6.0, (isMobile ? 16.2 : isCompact ? 15.4 : 15.0) * zoom);
-  sceneState.camera.fov = isMobile ? 40 : isCompact ? 36 : 33;
-  sceneState.camera.lookAt(0, isMobile ? 1.25 : 1.2, isMobile ? 1.15 : 0.65);
+  if (sceneState.focusMode) {
+    sceneState.cameraTargetPosition.set(0, isMobile ? 3.85 : isCompact ? 3.95 : 4.05, (isMobile ? 8.2 : isCompact ? 6.95 : 6.45) * zoom);
+    sceneState.cameraTargetLookAt.set(0, isMobile ? 1.64 : isCompact ? 1.72 : 1.78, isMobile ? 0.48 : 0.28);
+    sceneState.cameraTargetFov = isMobile ? 27 : isCompact ? 25 : 24;
+  } else {
+    sceneState.cameraTargetPosition.set(0, isMobile ? 5.2 : isCompact ? 5.75 : 6.0, (isMobile ? 16.2 : isCompact ? 15.4 : 15.0) * zoom);
+    sceneState.cameraTargetLookAt.set(0, isMobile ? 1.25 : 1.2, isMobile ? 1.15 : 0.65);
+    sceneState.cameraTargetFov = isMobile ? 40 : isCompact ? 36 : 33;
+  }
   if (sceneState.machine) {
     const scale = isMobile ? Math.max(0.38, Math.min(0.46, width / 860)) : isCompact ? 0.66 : 0.76;
     sceneState.machine.scale.setScalar(scale);
@@ -1565,11 +1575,32 @@ function applyWhiteout() {
 }
 
 function zoomOut() {
+  if (sceneState.focusMode) {
+    setFocusMode(false);
+    return;
+  }
   sceneState.zoom = sceneState.zoom >= 1.24 ? 1 : Math.min(1.26, sceneState.zoom + 0.13);
   resizeScene();
   input.focus({ preventScroll: true });
   setTemporaryStatus(sceneState.zoom === 1 ? "Zoom reset" : "Zoomed out");
   playKey(0.08);
+}
+
+function setFocusMode(enabled) {
+  sceneState.focusMode = enabled;
+  sceneState.zoom = 1;
+  updateFocusButton();
+  resizeScene();
+  input.focus({ preventScroll: true });
+  setTemporaryStatus(enabled ? "Focus mode" : "Full view");
+  playKey(0.08);
+}
+
+function updateFocusButton() {
+  focusButton?.setAttribute("aria-pressed", String(sceneState.focusMode));
+  if (focusLabel) {
+    focusLabel.textContent = sceneState.focusMode ? "Full view" : "Focus";
+  }
 }
 
 function rotateView(amount) {
