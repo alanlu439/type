@@ -56,7 +56,10 @@ const printHeadMetrics = {
   contactZ: -0.49,
   ribbonRestY: 1.9,
   ribbonRestZ: -0.48,
-  escapementDelay: 118
+  strikeDuration: 184,
+  strikeContactTime: 66,
+  strikeAttackRatio: 0.32,
+  escapementDelay: 104
 };
 
 const keyRows = [
@@ -187,6 +190,12 @@ input.addEventListener("keydown", (event) => {
 
 input.addEventListener("keyup", releaseTypewriterModifier);
 window.addEventListener("keyup", releaseTypewriterModifier);
+window.addEventListener("keydown", (event) => {
+  if (!shouldRouteGlobalShortcut(event)) {
+    return;
+  }
+  handleCommandShortcut(event);
+});
 
 resetButton.addEventListener("click", () => clearPage());
 clearPageButton?.addEventListener("click", () => clearPage());
@@ -1191,6 +1200,7 @@ function halfSpace() {
 
 function setMargin(side) {
   const column = Math.max(0, Math.round(typewriterState.col));
+  input.focus({ preventScroll: true });
   if (side === "left") {
     typewriterState.leftMargin = Math.min(column, typewriterState.rightMargin - 2);
     if (typewriterState.col < typewriterState.leftMargin) {
@@ -1248,35 +1258,36 @@ function ringMarginBell() {
 
 function strikeMachine(value) {
   const normalized = value === " " ? " " : value;
+  const printableStrike = String(normalized).length === 1 && normalized !== " ";
   const key = sceneState.keys.get(normalized) || sceneState.keys.get(String(normalized).toLowerCase());
   if (key) {
     key.userData.press = 1;
   }
 
   const now = performance.now();
-  const index = keyIndexForValue(normalized);
-  const primary = sceneState.typebars[index % sceneState.typebars.length];
-  if (primary) {
-    primary.strikeStart = now;
-    primary.intensity = 1;
-    const previous = sceneState.typebars[(index - 1 + sceneState.typebars.length) % sceneState.typebars.length];
-    const next = sceneState.typebars[(index + 1) % sceneState.typebars.length];
-    previous.strikeStart = now + 22;
-    previous.intensity = Math.max(previous.intensity, 0.28);
-    next.strikeStart = now + 18;
-    next.intensity = Math.max(next.intensity, 0.32);
-    sceneState.lastStrike = now;
+  sceneState.typebars.forEach((arm) => {
+    arm.strikeStart = -Infinity;
+    arm.intensity = 0;
+  });
+
+  if (printableStrike) {
+    const index = keyIndexForValue(normalized);
+    const primary = sceneState.typebars[index % sceneState.typebars.length];
+    if (primary) {
+      primary.strikeStart = now;
+      primary.intensity = 1;
+      sceneState.lastStrike = now;
+    }
   }
 
-  const printableStrike = String(normalized).length === 1 && normalized !== " ";
   if (printableStrike) {
     sceneState.carriageHoldUntil = Math.max(sceneState.carriageHoldUntil, now + printHeadMetrics.escapementDelay);
-    sceneState.paperImpactStart = now + 82;
+    sceneState.paperImpactStart = now + printHeadMetrics.strikeContactTime;
     window.setTimeout(drawPaper, printHeadMetrics.escapementDelay + 26);
   } else {
     sceneState.paperImpact = 1;
   }
-  sceneState.ribbonPulse = 1;
+  sceneState.ribbonPulse = printableStrike ? 1 : Math.max(sceneState.ribbonPulse, 0.28);
   sceneState.carriageJerk += normalized === "Enter" ? -0.34 : printableStrike ? 0.014 : 0.055;
 }
 
@@ -1393,7 +1404,6 @@ function animate() {
   requestAnimationFrame(animate);
   const state = sceneState;
   const now = performance.now();
-  const time = now * 0.001;
 
   if (now >= state.carriageHoldUntil) {
     state.carriageShift += (state.targetCarriageShift - state.carriageShift) * 0.16;
@@ -1428,21 +1438,21 @@ function animate() {
   state.typebars.forEach((arm) => {
     const elapsed = now - arm.strikeStart;
     let lift = 0;
-    if (elapsed >= 0 && elapsed < 260) {
-      const t = elapsed / 260;
-      const attack = 0.34;
+    if (elapsed >= 0 && elapsed < printHeadMetrics.strikeDuration) {
+      const t = elapsed / printHeadMetrics.strikeDuration;
+      const attack = printHeadMetrics.strikeAttackRatio;
       lift = t < attack
         ? easeOutCubic(t / attack)
-        : 1 - easeInCubic((t - attack) / (1 - attack));
+        : 1 - easeOutCubic((t - attack) / (1 - attack));
       lift *= arm.intensity;
-    } else if (elapsed >= 260) {
+    } else if (elapsed >= printHeadMetrics.strikeDuration) {
       arm.intensity = 0;
+      arm.strikeStart = -Infinity;
     }
     const end = arm.rest.clone().lerp(arm.target, lift);
-    const impact = Math.max(0, 1 - Math.abs(elapsed - 88) / 34) * arm.intensity;
-    end.y += impact * 0.06;
-    end.z -= impact * 0.05;
-    end.x += Math.sin(time * 3 + arm.phase * 8) * 0.01 * (1 - lift);
+    const impact = Math.max(0, 1 - Math.abs(elapsed - printHeadMetrics.strikeContactTime) / 18) * arm.intensity;
+    end.y += impact * 0.028;
+    end.z -= impact * 0.024;
     updateCylinderBetween(arm.rod, arm.start, end);
     arm.slug.position.copy(end);
     arm.slug.lookAt(arm.target);
@@ -1670,6 +1680,7 @@ function rotateView(amount) {
 }
 
 function saveAsImage() {
+  input.focus({ preventScroll: true });
   const imageCanvas = sceneState.renderer?.domElement || canvas;
   if (!imageCanvas?.toBlob) {
     setStatus("Image unavailable");
@@ -1757,6 +1768,24 @@ function handleCommandShortcut(event) {
     return true;
   }
   return false;
+}
+
+function shouldRouteGlobalShortcut(event) {
+  if (event.defaultPrevented || event.target === input || event.metaKey || event.ctrlKey) {
+    return false;
+  }
+
+  const commandKeys = new Set(["F1", "Escape", "Delete", "Tab", "F3", "F4", "F5", "F6", "F10"]);
+  if (!commandKeys.has(event.key)) {
+    return false;
+  }
+
+  const target = event.target;
+  if (event.key === "Tab" && target?.closest?.("button, a, input, textarea, select, [contenteditable='true']")) {
+    return false;
+  }
+
+  return true;
 }
 
 function updateSoundButtons() {
