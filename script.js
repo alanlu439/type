@@ -8,6 +8,14 @@ const wordCount = document.querySelector("[data-word-count]");
 const readyLabel = document.querySelector("[data-ready-label]");
 const exportPdfButton = document.querySelector("[data-export-pdf]");
 const resetButton = document.querySelector("[data-reset]");
+const clearPageButton = document.querySelector("[data-clear-page]");
+const ribbonCycleButton = document.querySelector("[data-ribbon-cycle]");
+const zoomOutButton = document.querySelector("[data-zoom-out]");
+const whiteoutButton = document.querySelector("[data-whiteout]");
+const snapshotButton = document.querySelector("[data-snapshot]");
+const rotateLeftButton = document.querySelector("[data-rotate-left]");
+const rotateRightButton = document.querySelector("[data-rotate-right]");
+const sidebarToggleButtons = Array.from(document.querySelectorAll("[data-sidebar-toggle]"));
 const soundButtons = Array.from(document.querySelectorAll("[data-sound-toggle]"));
 const soundLabels = Array.from(document.querySelectorAll("[data-sound-label]"));
 const inkButtons = Array.from(document.querySelectorAll("[data-ink]"));
@@ -65,12 +73,16 @@ const sceneState = {
   keys: new Map(),
   keyObjects: [],
   typebars: [],
+  baseMachineX: 0,
   carriageShift: 0,
   targetCarriageShift: 0,
   deckJolt: 0,
   targetDeckJolt: 0,
   baseMachineY: -0.08,
   baseMachineZ: 0,
+  zoom: 1,
+  viewRotation: 0,
+  targetViewRotation: 0,
   ink: "#201b17",
   paperTone: "ivory",
   lastStrike: 0,
@@ -81,10 +93,12 @@ const sceneState = {
 let audioContext;
 let soundEnabled = true;
 let lastBellColumn = -1;
+let statusTimer;
 
 initScene();
 input.value = seedText;
 renderPage();
+setSidebarExpanded(window.innerWidth >= 760, { focus: false });
 input.focus({ preventScroll: true });
 
 stage.addEventListener("pointerdown", () => {
@@ -108,6 +122,10 @@ input.addEventListener("input", () => {
 
 input.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) {
+    return;
+  }
+
+  if (handleCommandShortcut(event)) {
     return;
   }
 
@@ -135,14 +153,8 @@ input.addEventListener("keydown", (event) => {
   }
 });
 
-resetButton.addEventListener("click", () => {
-  input.value = "";
-  renderPage();
-  input.focus({ preventScroll: true });
-  setStatus("Ready");
-  strikeMachine("Enter");
-  playReturn();
-});
+resetButton.addEventListener("click", () => clearPage());
+clearPageButton?.addEventListener("click", () => clearPage());
 
 exportPdfButton.addEventListener("click", () => {
   const pdf = buildPdf(input.value || " ");
@@ -155,10 +167,9 @@ exportPdfButton.addEventListener("click", () => {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  setStatus("Exported");
   strikeMachine("Export");
   playBell(0.16);
-  window.setTimeout(() => setStatus(document.activeElement === input ? "Writing" : "Ready"), 1200);
+  setTemporaryStatus("Exported", 1200);
 });
 
 soundButtons.forEach((button) => {
@@ -170,6 +181,19 @@ soundButtons.forEach((button) => {
       playBell(0.18);
     }
     input.focus({ preventScroll: true });
+  });
+});
+
+ribbonCycleButton?.addEventListener("click", () => cycleRibbon());
+zoomOutButton?.addEventListener("click", () => zoomOut());
+whiteoutButton?.addEventListener("click", () => applyWhiteout());
+snapshotButton?.addEventListener("click", () => saveAsImage());
+rotateLeftButton?.addEventListener("click", () => rotateView(-0.18));
+rotateRightButton?.addEventListener("click", () => rotateView(0.18));
+sidebarToggleButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const expanded = document.body.classList.contains("controls-hidden");
+    setSidebarExpanded(expanded);
   });
 });
 
@@ -899,8 +923,10 @@ function animate() {
   state.deckJolt += (state.targetDeckJolt - state.deckJolt) * 0.2;
 
   if (state.machine) {
-    state.machine.rotation.y = state.pointer.x * 0.035;
+    state.viewRotation += (state.targetViewRotation - state.viewRotation) * 0.12;
+    state.machine.rotation.y = state.viewRotation + state.pointer.x * 0.035;
     state.machine.rotation.x = -0.015 - state.pointer.y * 0.018;
+    state.machine.position.x = state.baseMachineX;
     state.machine.position.y = state.baseMachineY - state.deckJolt * 0.025;
     state.machine.position.z = state.baseMachineZ;
   }
@@ -939,12 +965,15 @@ function resizeScene() {
   sceneState.camera.aspect = width / height;
   const isCompact = width < 1120;
   const isMobile = width < 760;
-  sceneState.camera.position.set(0, isMobile ? 4.85 : isCompact ? 5.55 : 5.75, isMobile ? 15.1 : isCompact ? 14.2 : 13.6);
+  const zoom = sceneState.zoom;
+  sceneState.camera.position.set(0, isMobile ? 4.85 : isCompact ? 5.55 : 5.75, (isMobile ? 15.1 : isCompact ? 14.2 : 13.6) * zoom);
   sceneState.camera.fov = isMobile ? 40 : isCompact ? 36 : 32;
   sceneState.camera.lookAt(0, isMobile ? 0.95 : 0.9, isMobile ? 1.0 : 0.55);
   if (sceneState.machine) {
     const scale = isMobile ? Math.max(0.42, Math.min(0.5, width / 820)) : isCompact ? 0.76 : 0.82;
+    const railVisible = !document.body.classList.contains("controls-hidden");
     sceneState.machine.scale.setScalar(scale);
+    sceneState.baseMachineX = !isMobile && railVisible ? 0.85 : 0;
     sceneState.baseMachineY = isMobile ? -0.58 : isCompact ? -0.66 : -0.54;
     sceneState.baseMachineZ = isMobile ? 1.32 : isCompact ? 0.78 : 0.52;
   }
@@ -1043,6 +1072,129 @@ function markSelected(group, selected) {
   });
 }
 
+function clearPage() {
+  input.value = "";
+  renderPage();
+  input.focus({ preventScroll: true });
+  setStatus("Ready");
+  strikeMachine("Enter");
+  playReturn();
+}
+
+function cycleRibbon() {
+  const currentIndex = Math.max(0, inkButtons.findIndex((button) => button.classList.contains("is-selected")));
+  const next = inkButtons[(currentIndex + 1) % inkButtons.length];
+  if (next) {
+    next.click();
+    setTemporaryStatus("Ribbon changed");
+  }
+}
+
+function applyWhiteout() {
+  input.value = input.value.slice(0, -1);
+  renderPage();
+  input.focus({ preventScroll: true });
+  setTemporaryStatus("White-out");
+  strikeMachine("Backspace");
+  playThud();
+}
+
+function zoomOut() {
+  sceneState.zoom = sceneState.zoom >= 1.24 ? 1 : Math.min(1.26, sceneState.zoom + 0.13);
+  resizeScene();
+  input.focus({ preventScroll: true });
+  setTemporaryStatus(sceneState.zoom === 1 ? "Zoom reset" : "Zoomed out");
+  playKey(0.08);
+}
+
+function rotateView(amount) {
+  sceneState.targetViewRotation = Math.max(-0.42, Math.min(0.42, sceneState.targetViewRotation + amount));
+  input.focus({ preventScroll: true });
+  setTemporaryStatus(amount < 0 ? "Rotated left" : "Rotated right");
+  strikeMachine("Rotate");
+  playKey(0.08);
+}
+
+function saveAsImage() {
+  const imageCanvas = sceneState.renderer?.domElement || canvas;
+  if (!imageCanvas?.toBlob) {
+    setStatus("Image unavailable");
+    return;
+  }
+
+  imageCanvas.toBlob((blob) => {
+    if (!blob) {
+      setStatus("Image unavailable");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "typewriter-snapshot.png";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setTemporaryStatus("Image saved", 1200);
+    strikeMachine("Image");
+    playBell(0.12);
+  }, "image/png");
+}
+
+function setSidebarExpanded(expanded, options = {}) {
+  document.body.classList.toggle("controls-hidden", !expanded);
+  sidebarToggleButtons.forEach((button) => {
+    button.setAttribute("aria-expanded", String(expanded));
+    const label = button.querySelector("[data-sidebar-label]");
+    if (label) {
+      label.textContent = expanded ? "Hide sidebar" : "Show controls";
+    }
+  });
+  resizeScene();
+  if (options.focus !== false) {
+    input.focus({ preventScroll: true });
+  }
+}
+
+function handleCommandShortcut(event) {
+  if (event.key === "F1") {
+    event.preventDefault();
+    cycleRibbon();
+    return true;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    zoomOut();
+    return true;
+  }
+  if (event.key === "Delete") {
+    event.preventDefault();
+    applyWhiteout();
+    return true;
+  }
+  if (event.key === "Tab") {
+    event.preventDefault();
+    setSidebarExpanded(document.body.classList.contains("controls-hidden"));
+    return true;
+  }
+  if (event.key === "F5") {
+    event.preventDefault();
+    rotateView(-0.18);
+    return true;
+  }
+  if (event.key === "F6") {
+    event.preventDefault();
+    rotateView(0.18);
+    return true;
+  }
+  if (event.key === "F10") {
+    event.preventDefault();
+    clearPage();
+    return true;
+  }
+  return false;
+}
+
 function updateSoundButtons() {
   soundButtons.forEach((button) => button.setAttribute("aria-pressed", String(soundEnabled)));
   soundLabels.forEach((label) => {
@@ -1051,7 +1203,22 @@ function updateSoundButtons() {
 }
 
 function setStatus(status) {
+  if (statusTimer) {
+    window.clearTimeout(statusTimer);
+    statusTimer = undefined;
+  }
   readyLabel.textContent = status;
+}
+
+function setTemporaryStatus(status, delay = 900) {
+  if (statusTimer) {
+    window.clearTimeout(statusTimer);
+  }
+  readyLabel.textContent = status;
+  statusTimer = window.setTimeout(() => {
+    statusTimer = undefined;
+    readyLabel.textContent = document.activeElement === input ? "Writing" : "Ready";
+  }, delay);
 }
 
 function ensureAudio() {

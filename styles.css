@@ -5,6 +5,8 @@
   --text: #fff8ea;
   --muted: rgba(255, 248, 234, 0.68);
   --brass: #d8ad68;
+  --orange: #ff6534;
+  --paper-ui: #f5f0e6;
   --green: #75d184;
   --border: rgba(255, 232, 188, 0.16);
   --ink: #201b17;
@@ -80,7 +82,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(27, 24, 20, 0.86), rgba(9, 8, 7, 0.78)),
+    linear-gradient(90deg, rgba(255, 101, 52, 0.95), rgba(255, 101, 52, 0.82) 16.5rem, rgba(27, 24, 20, 0.9) 16.5rem, rgba(9, 8, 7, 0.78)),
     rgba(9, 8, 7, 0.66);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36);
   backdrop-filter: blur(18px);
@@ -95,6 +97,8 @@ a {
   font-size: clamp(1.85rem, 2.45vw, 2.75rem);
   font-weight: 700;
   letter-spacing: 0;
+  color: #fffaf0;
+  text-shadow: 0 2px 0 rgba(82, 30, 11, 0.28);
 }
 
 .toolbar-cluster {
@@ -237,6 +241,176 @@ a {
     radial-gradient(circle at 50% 35%, rgba(255, 232, 188, 0.04), transparent 40rem);
 }
 
+.command-rail {
+  position: fixed;
+  top: calc(clamp(0.55rem, 1.6vw, 1.1rem) + 4.65rem);
+  left: clamp(0.55rem, 1.6vw, 1.1rem);
+  bottom: clamp(0.55rem, 1.6vw, 1.1rem);
+  z-index: 4;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(20.2rem, calc(100vw - 1.3rem));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  color: #292720;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 235, 222, 0.96)),
+    var(--paper-ui);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: translateX(0);
+  opacity: 1;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+body.controls-hidden .command-rail {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(-100% - 1.25rem));
+}
+
+.rail-copy {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1.1rem 1.15rem 1rem;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.42;
+}
+
+.rail-copy p {
+  margin: 0;
+}
+
+.rail-kicker {
+  color: #5f5b50;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mini-keyboard {
+  display: grid;
+  gap: 0.34rem;
+  padding: 0.9rem 0.72rem 1rem;
+  background: linear-gradient(180deg, #ff7040, var(--orange));
+  box-shadow: inset 0 8px 18px rgba(143, 45, 14, 0.24);
+}
+
+.mini-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.16rem;
+}
+
+.mini-row span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.16rem;
+  height: 2.08rem;
+  border: 1px solid rgba(75, 54, 32, 0.18);
+  border-radius: 5px;
+  color: #2a261f;
+  background: #fffaf1;
+  box-shadow:
+    inset 0 -4px 0 rgba(0, 0, 0, 0.06),
+    0 3px 7px rgba(70, 22, 6, 0.16);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.mini-row .wide {
+  width: 2.34rem;
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+
+.rail-actions {
+  display: grid;
+  align-content: start;
+  gap: 0.48rem;
+  min-height: 0;
+  padding: 0.95rem 1rem 1.05rem;
+  overflow: auto;
+}
+
+.rail-command,
+.rail-peek {
+  border: 1px solid rgba(47, 38, 27, 0.16);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 780;
+}
+
+.rail-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.58rem;
+  padding: 0.4rem 0.52rem 0.4rem 0.72rem;
+  color: #211e18;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 5px 14px rgba(44, 35, 25, 0.1);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.rail-command:hover,
+.rail-command:focus-visible,
+.rail-peek:hover,
+.rail-peek:focus-visible {
+  border-color: rgba(255, 101, 52, 0.72);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.rail-command kbd {
+  min-width: 2.2rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid rgba(37, 31, 23, 0.28);
+  border-radius: 4px;
+  color: #181510;
+  background: #fff9ef;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-align: center;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+}
+
+.rail-peek {
+  position: fixed;
+  left: clamp(0.55rem, 1.6vw, 1.1rem);
+  bottom: clamp(0.55rem, 1.6vw, 1.1rem);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.65rem;
+  padding: 0 0.9rem;
+  color: #211e18;
+  background: linear-gradient(180deg, #fffaf1, #efe5d3);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.36);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.6rem);
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+body.controls-hidden .rail-peek {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .scene-stage::after {
   position: absolute;
   inset: 0;
@@ -370,6 +544,10 @@ a {
   .export-button {
     justify-self: end;
   }
+
+  .command-rail {
+    width: min(18.5rem, calc(100vw - 1.3rem));
+  }
 }
 
 @media (max-width: 760px) {
@@ -384,6 +562,9 @@ a {
     grid-template-columns: 1fr auto;
     gap: 0.5rem;
     padding: 0.45rem;
+    background:
+      linear-gradient(180deg, rgba(255, 101, 52, 0.94), rgba(30, 24, 19, 0.88) 4rem, rgba(9, 8, 7, 0.82)),
+      rgba(9, 8, 7, 0.76);
   }
 
   .brand {
@@ -436,5 +617,61 @@ a {
 
   .word-count span {
     display: none;
+  }
+
+  .command-rail {
+    top: auto;
+    right: 0.65rem;
+    left: 0.65rem;
+    bottom: 0.65rem;
+    width: auto;
+    max-height: 42svh;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .rail-copy {
+    padding: 0.85rem 0.9rem 0.72rem;
+    font-size: 0.9rem;
+  }
+
+  .mini-keyboard {
+    padding: 0.72rem 0.55rem;
+  }
+
+  .mini-row {
+    gap: 0.14rem;
+  }
+
+  .mini-row span {
+    width: 1.02rem;
+    height: 1.72rem;
+    font-size: 0.56rem;
+  }
+
+  .mini-row .wide {
+    width: 2.06rem;
+    font-size: 0.44rem;
+  }
+
+  .rail-actions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.42rem;
+    padding: 0.7rem;
+  }
+
+  .rail-command {
+    min-height: 2.3rem;
+    padding: 0.35rem 0.42rem;
+    font-size: 0.72rem;
+  }
+
+  .rail-command kbd {
+    min-width: 1.8rem;
+    font-size: 0.56rem;
+  }
+
+  .rail-peek {
+    left: 0.65rem;
+    bottom: 0.65rem;
   }
 }
