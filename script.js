@@ -15,6 +15,8 @@ const whiteoutButton = document.querySelector("[data-whiteout]");
 const snapshotButton = document.querySelector("[data-snapshot]");
 const rotateLeftButton = document.querySelector("[data-rotate-left]");
 const rotateRightButton = document.querySelector("[data-rotate-right]");
+const leftMarginButton = document.querySelector("[data-left-margin]");
+const rightMarginButton = document.querySelector("[data-right-margin]");
 const sidebarToggleButtons = Array.from(document.querySelectorAll("[data-sidebar-toggle]"));
 const soundButtons = Array.from(document.querySelectorAll("[data-sound-toggle]"));
 const soundLabels = Array.from(document.querySelectorAll("[data-sound-label]"));
@@ -60,6 +62,20 @@ const keyRows = [
   ]
 ];
 
+const defaultMargins = {
+  left: 0,
+  right: 56
+};
+
+const typewriterState = {
+  row: 0,
+  col: 0,
+  leftMargin: defaultMargins.left,
+  rightMargin: defaultMargins.right,
+  marginRelease: false,
+  lastBellColumn: -1
+};
+
 const sceneState = {
   renderer: null,
   scene: null,
@@ -70,14 +86,19 @@ const sceneState = {
   paperTexture: null,
   paperContext: null,
   paperCanvas: null,
+  ribbonGuide: null,
   keys: new Map(),
   keyObjects: [],
   typebars: [],
   baseMachineX: 0,
   carriageShift: 0,
   targetCarriageShift: 0,
+  carriageJerk: 0,
   deckJolt: 0,
   targetDeckJolt: 0,
+  paperImpact: 0,
+  ribbonPulse: 0,
+  returnSweep: 0,
   baseMachineY: -0.08,
   baseMachineZ: 0,
   zoom: 1,
@@ -92,13 +113,14 @@ const sceneState = {
 
 let audioContext;
 let soundEnabled = true;
-let lastBellColumn = -1;
 let statusTimer;
 
 initScene();
 input.value = seedText;
+input.setSelectionRange(input.value.length, input.value.length);
+syncCarriageFromInput();
 renderPage();
-setSidebarExpanded(window.innerWidth >= 760, { focus: false });
+setSidebarExpanded(window.innerWidth >= 1120, { focus: false });
 input.focus({ preventScroll: true });
 
 stage.addEventListener("pointerdown", () => {
@@ -117,11 +139,12 @@ input.addEventListener("blur", () => setStatus("Ready"));
 
 input.addEventListener("input", () => {
   setStatus("Writing");
+  syncCarriageFromInput();
   renderPage();
 });
 
 input.addEventListener("keydown", (event) => {
-  if (event.metaKey || event.ctrlKey || event.altKey) {
+  if (event.metaKey || event.ctrlKey) {
     return;
   }
 
@@ -129,29 +152,20 @@ input.addEventListener("keydown", (event) => {
     return;
   }
 
-  ensureAudio();
-  strikeMachine(event.key);
-
-  if (event.key === "Enter") {
-    lastBellColumn = -1;
-    playReturn();
+  if (event.key === "Alt") {
+    typewriterState.marginRelease = true;
+    setTemporaryStatus("Margin release", 650);
+    playKey(0.06);
     return;
   }
 
-  if (event.key === "Backspace" || event.key === "Delete") {
-    playThud();
-    return;
-  }
-
-  if (event.key.length === 1 || event.key === "Tab" || event.key === " ") {
-    playKey();
-    const column = currentColumn();
-    if (column > 0 && column % 58 === 0 && column !== lastBellColumn) {
-      lastBellColumn = column;
-      window.setTimeout(() => playBell(0.1), 24);
-    }
+  if (typeIntoTypewriter(event)) {
+    event.preventDefault();
   }
 });
+
+input.addEventListener("keyup", releaseTypewriterModifier);
+window.addEventListener("keyup", releaseTypewriterModifier);
 
 resetButton.addEventListener("click", () => clearPage());
 clearPageButton?.addEventListener("click", () => clearPage());
@@ -190,6 +204,8 @@ whiteoutButton?.addEventListener("click", () => applyWhiteout());
 snapshotButton?.addEventListener("click", () => saveAsImage());
 rotateLeftButton?.addEventListener("click", () => rotateView(-0.18));
 rotateRightButton?.addEventListener("click", () => rotateView(0.18));
+leftMarginButton?.addEventListener("click", () => setMargin("left"));
+rightMarginButton?.addEventListener("click", () => setMargin("right"));
 sidebarToggleButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const expanded = document.body.classList.contains("controls-hidden");
@@ -482,6 +498,12 @@ function addRibbon(machine, black, brass, ribbonRed) {
   const leftRibbon = makeRibbonSegment(new THREE.Vector3(-3.55, 1.46, 0.3), new THREE.Vector3(-0.1, 1.92, -0.55), 0.09, ribbonRed);
   const rightRibbon = makeRibbonSegment(new THREE.Vector3(3.55, 1.46, 0.3), new THREE.Vector3(0.1, 1.92, -0.55), 0.09, ribbonRed);
   machine.add(leftRibbon, rightRibbon);
+
+  const ribbonGuide = roundedBox(0.74, 0.12, 0.16, 0.04, brass);
+  ribbonGuide.position.set(0, 1.9, -0.48);
+  ribbonGuide.rotation.x = -0.12;
+  sceneState.ribbonGuide = ribbonGuide;
+  machine.add(ribbonGuide);
 }
 
 function addTypebars(machine, brass, black) {
@@ -498,7 +520,7 @@ function addTypebars(machine, brass, black) {
     slug.lookAt(target);
     const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), brass);
     hinge.position.copy(start);
-    const arm = { start, rest, target, rod, slug, hinge, strike: 0, phase: i / count };
+    const arm = { start, rest, target, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
@@ -803,6 +825,224 @@ function registerKey(value, key) {
   }
 }
 
+function releaseTypewriterModifier(event) {
+  if (event.key === "Alt" && typewriterState.marginRelease) {
+    typewriterState.marginRelease = false;
+    setTemporaryStatus("Margin locked", 500);
+    playKey(0.04);
+  }
+}
+
+function typeIntoTypewriter(event) {
+  const key = event.key === "Spacebar" ? " " : event.key;
+  ensureAudio();
+
+  if (event.altKey) {
+    typewriterState.marginRelease = true;
+  }
+
+  if (key === "Shift" || key === "CapsLock") {
+    strikeMachine(key);
+    playKey(0.055);
+    return true;
+  }
+
+  if (key === "Backspace") {
+    moveCarriage(-1);
+    strikeMachine("Backspace");
+    playThud();
+    return true;
+  }
+
+  if (key === "Delete") {
+    applyWhiteout();
+    return true;
+  }
+
+  if (key === "Enter") {
+    returnCarriage();
+    return true;
+  }
+
+  if (key === "PageUp" || key === "ArrowUp") {
+    moveRoller(-1);
+    return true;
+  }
+
+  if (key === "PageDown" || key === "ArrowDown") {
+    moveRoller(1);
+    return true;
+  }
+
+  if (key === "ArrowLeft") {
+    setTemporaryStatus("Use Backspace");
+    playThud();
+    return true;
+  }
+
+  if (key === "ArrowRight") {
+    setTemporaryStatus("Use Space");
+    playThud();
+    return true;
+  }
+
+  if (key === "`" || key === "§") {
+    halfSpace();
+    return true;
+  }
+
+  if (key.length === 1) {
+    printTypewriterCharacter(key);
+    return true;
+  }
+
+  return false;
+}
+
+function getPaperLines() {
+  return input.value.split("\n");
+}
+
+function ensurePaperLine(lines, row) {
+  while (lines.length <= row) {
+    lines.push("");
+  }
+}
+
+function writePaperLines(lines) {
+  input.value = lines.join("\n");
+  setTextareaCaretFromCarriage();
+  renderPage();
+}
+
+function printTypewriterCharacter(character) {
+  if (typewriterState.col >= typewriterState.rightMargin && !typewriterState.marginRelease) {
+    setTemporaryStatus("Right margin");
+    playBell(0.14);
+    return;
+  }
+
+  const lines = getPaperLines();
+  ensurePaperLine(lines, typewriterState.row);
+  const column = Math.max(0, Math.floor(typewriterState.col));
+  const currentLine = lines[typewriterState.row].padEnd(column + 1, " ");
+  lines[typewriterState.row] = `${currentLine.slice(0, column)}${character}${currentLine.slice(column + 1)}`;
+  typewriterState.col += 1;
+  setStatus("Writing");
+  strikeMachine(character);
+  playKey();
+  writePaperLines(lines);
+  ringMarginBell();
+}
+
+function moveCarriage(delta) {
+  const next = typewriterState.col + delta;
+  if (next < typewriterState.leftMargin && !typewriterState.marginRelease) {
+    setTemporaryStatus("Left margin");
+    return;
+  }
+
+  typewriterState.col = Math.max(0, next);
+  typewriterState.lastBellColumn = -1;
+  setTextareaCaretFromCarriage();
+  updateCarriage();
+  setTemporaryStatus("Carriage moved");
+}
+
+function moveRoller(delta) {
+  typewriterState.row = Math.max(0, typewriterState.row + delta);
+  const lines = getPaperLines();
+  ensurePaperLine(lines, typewriterState.row);
+  input.value = lines.join("\n");
+  setTextareaCaretFromCarriage();
+  renderPage();
+  strikeMachine(delta > 0 ? "PageDown" : "PageUp");
+  playReturn();
+  setTemporaryStatus(delta > 0 ? "Roller down" : "Roller up");
+}
+
+function returnCarriage() {
+  typewriterState.row += 1;
+  typewriterState.col = typewriterState.leftMargin;
+  typewriterState.lastBellColumn = -1;
+  const lines = getPaperLines();
+  ensurePaperLine(lines, typewriterState.row);
+  input.value = lines.join("\n");
+  setTextareaCaretFromCarriage();
+  renderPage();
+  strikeMachine("Enter");
+  sceneState.returnSweep = 1;
+  sceneState.carriageJerk = -0.5;
+  playReturn();
+  setTemporaryStatus("Carriage return");
+}
+
+function halfSpace() {
+  typewriterState.col += 0.5;
+  setTextareaCaretFromCarriage();
+  updateCarriage();
+  strikeMachine("`");
+  playKey(0.08);
+  setTemporaryStatus("Half-space");
+}
+
+function setMargin(side) {
+  const column = Math.max(0, Math.round(typewriterState.col));
+  if (side === "left") {
+    typewriterState.leftMargin = Math.min(column, typewriterState.rightMargin - 2);
+    if (typewriterState.col < typewriterState.leftMargin) {
+      typewriterState.col = typewriterState.leftMargin;
+    }
+    setTemporaryStatus("Left margin set");
+  } else {
+    typewriterState.rightMargin = Math.max(column, typewriterState.leftMargin + 2);
+    setTemporaryStatus("Right margin set");
+  }
+  typewriterState.lastBellColumn = -1;
+  updateCarriage();
+  strikeMachine(side === "left" ? "F3" : "F4");
+  playBell(0.1);
+}
+
+function resetMargins() {
+  typewriterState.leftMargin = defaultMargins.left;
+  typewriterState.rightMargin = defaultMargins.right;
+  typewriterState.lastBellColumn = -1;
+}
+
+function syncCarriageFromInput() {
+  if (!input.value) {
+    typewriterState.row = 0;
+    typewriterState.col = 0;
+    return;
+  }
+  const caret = input.selectionStart ?? input.value.length;
+  const beforeCaret = input.value.slice(0, caret);
+  const lines = beforeCaret.split("\n");
+  typewriterState.row = Math.max(0, lines.length - 1);
+  typewriterState.col = lines[lines.length - 1]?.length || 0;
+}
+
+function setTextareaCaretFromCarriage() {
+  const lines = getPaperLines();
+  ensurePaperLine(lines, typewriterState.row);
+  const column = Math.max(0, Math.floor(typewriterState.col));
+  lines[typewriterState.row] = lines[typewriterState.row].padEnd(column, " ");
+  const index = lines.slice(0, typewriterState.row).reduce((sum, line) => sum + line.length + 1, 0) + column;
+  input.value = lines.join("\n");
+  input.setSelectionRange(index, index);
+}
+
+function ringMarginBell() {
+  const nearRightMargin = typewriterState.col >= typewriterState.rightMargin - 5 && typewriterState.col <= typewriterState.rightMargin;
+  if (nearRightMargin && typewriterState.lastBellColumn !== typewriterState.row) {
+    typewriterState.lastBellColumn = typewriterState.row;
+    window.setTimeout(() => playBell(0.1), 24);
+  } else if (!nearRightMargin) {
+    typewriterState.lastBellColumn = -1;
+  }
+}
+
 function strikeMachine(value) {
   const normalized = value === " " ? " " : value;
   const key = sceneState.keys.get(normalized) || sceneState.keys.get(String(normalized).toLowerCase());
@@ -813,14 +1053,21 @@ function strikeMachine(value) {
   const index = keyIndexForValue(normalized);
   const primary = sceneState.typebars[index % sceneState.typebars.length];
   if (primary) {
-    primary.strike = 1;
+    const now = performance.now();
+    primary.strikeStart = now;
+    primary.intensity = 1;
     const previous = sceneState.typebars[(index - 1 + sceneState.typebars.length) % sceneState.typebars.length];
     const next = sceneState.typebars[(index + 1) % sceneState.typebars.length];
-    previous.strike = Math.max(previous.strike, 0.46);
-    next.strike = Math.max(next.strike, 0.46);
-    sceneState.lastStrike = performance.now();
+    previous.strikeStart = now + 22;
+    previous.intensity = Math.max(previous.intensity, 0.28);
+    next.strikeStart = now + 18;
+    next.intensity = Math.max(next.intensity, 0.32);
+    sceneState.lastStrike = now;
   }
 
+  sceneState.paperImpact = 1;
+  sceneState.ribbonPulse = 1;
+  sceneState.carriageJerk += normalized === "Enter" ? -0.34 : 0.055;
   sceneState.targetDeckJolt = 1;
   window.setTimeout(() => {
     sceneState.targetDeckJolt = 0;
@@ -877,7 +1124,9 @@ function drawPaper() {
   context.fillStyle = sceneState.ink;
   context.textBaseline = "top";
   context.font = "700 35px Courier New, monospace";
-  const lines = wrapText(input.value || "", 56);
+  const paperLines = input.value ? input.value.split(/\r?\n/) : [""];
+  const firstVisibleLine = Math.max(0, typewriterState.row - 8);
+  const lines = paperLines.slice(firstVisibleLine, firstVisibleLine + 9);
   const marginX = 180;
   const marginY = 138;
   const lineHeight = 54;
@@ -897,8 +1146,8 @@ function drawPaper() {
   context.globalAlpha = 1;
 
   if (document.activeElement === input || input.value) {
-    const caretLine = Math.min(lines.length - 1, 8);
-    const caretText = lines[caretLine] || "";
+    const caretLine = Math.max(0, Math.min(typewriterState.row - firstVisibleLine, 8));
+    const caretText = (paperLines[typewriterState.row] || "").slice(0, Math.max(0, Math.floor(typewriterState.col)));
     const caretX = marginX + context.measureText(caretText).width + 7;
     const caretY = marginY + caretLine * lineHeight + 3;
     context.fillRect(caretX, caretY, 5, 42);
@@ -915,12 +1164,17 @@ function updateCarriage() {
 function animate() {
   requestAnimationFrame(animate);
   const state = sceneState;
-  const time = performance.now() * 0.001;
+  const now = performance.now();
+  const time = now * 0.001;
 
   state.pointer.x += (state.targetPointer.x - state.pointer.x) * 0.04;
   state.pointer.y += (state.targetPointer.y - state.pointer.y) * 0.04;
   state.carriageShift += (state.targetCarriageShift - state.carriageShift) * 0.16;
   state.deckJolt += (state.targetDeckJolt - state.deckJolt) * 0.2;
+  state.carriageJerk *= 0.72;
+  state.paperImpact *= 0.72;
+  state.ribbonPulse *= 0.68;
+  state.returnSweep *= 0.82;
 
   if (state.machine) {
     state.viewRotation += (state.targetViewRotation - state.viewRotation) * 0.12;
@@ -932,7 +1186,7 @@ function animate() {
   }
 
   if (state.carriage) {
-    state.carriage.position.x = state.carriageShift;
+    state.carriage.position.x = state.carriageShift + state.carriageJerk - state.returnSweep * 0.18;
   }
 
   state.keyObjects.forEach((key) => {
@@ -941,18 +1195,36 @@ function animate() {
   });
 
   state.typebars.forEach((arm) => {
-    arm.strike *= 0.84;
-    const lift = Math.min(1, arm.strike * 1.08);
+    const elapsed = now - arm.strikeStart;
+    let lift = 0;
+    if (elapsed >= 0 && elapsed < 260) {
+      const t = elapsed / 260;
+      const attack = 0.34;
+      lift = t < attack
+        ? easeOutCubic(t / attack)
+        : 1 - easeInCubic((t - attack) / (1 - attack));
+      lift *= arm.intensity;
+    } else if (elapsed >= 260) {
+      arm.intensity = 0;
+    }
     const end = arm.rest.clone().lerp(arm.target, lift);
+    const impact = Math.max(0, 1 - Math.abs(elapsed - 88) / 34) * arm.intensity;
+    end.y += impact * 0.06;
+    end.z -= impact * 0.05;
     end.x += Math.sin(time * 3 + arm.phase * 8) * 0.01 * (1 - lift);
     updateCylinderBetween(arm.rod, arm.start, end);
     arm.slug.position.copy(end);
     arm.slug.lookAt(arm.target);
   });
 
-  const sinceStrike = performance.now() - state.lastStrike;
-  if (sinceStrike < 130 && state.paperMesh) {
-    state.paperMesh.position.z = -0.55 + Math.sin((sinceStrike / 130) * Math.PI) * 0.018;
+  if (state.paperMesh) {
+    state.paperMesh.position.z = -0.55 + state.paperImpact * 0.035;
+    state.paperMesh.position.y = 3.16 + state.returnSweep * 0.045;
+  }
+
+  if (state.ribbonGuide) {
+    state.ribbonGuide.position.y = 1.9 + state.ribbonPulse * 0.28;
+    state.ribbonGuide.position.z = -0.48 - state.ribbonPulse * 0.05;
   }
 
   state.renderer.render(state.scene, state.camera);
@@ -1074,10 +1346,16 @@ function markSelected(group, selected) {
 
 function clearPage() {
   input.value = "";
+  typewriterState.row = 0;
+  typewriterState.col = 0;
+  resetMargins();
+  setTextareaCaretFromCarriage();
   renderPage();
   input.focus({ preventScroll: true });
   setStatus("Ready");
   strikeMachine("Enter");
+  sceneState.returnSweep = 1;
+  sceneState.carriageJerk = -0.5;
   playReturn();
 }
 
@@ -1091,11 +1369,20 @@ function cycleRibbon() {
 }
 
 function applyWhiteout() {
-  input.value = input.value.slice(0, -1);
-  renderPage();
+  const lines = getPaperLines();
+  ensurePaperLine(lines, typewriterState.row);
+  let column = Math.max(0, Math.floor(typewriterState.col));
+  const line = lines[typewriterState.row] || "";
+  if ((!line[column] || line[column] === " ") && column > 0) {
+    column -= 1;
+  }
+  lines[typewriterState.row] = line.padEnd(column + 1, " ");
+  lines[typewriterState.row] = `${lines[typewriterState.row].slice(0, column)} ${lines[typewriterState.row].slice(column + 1)}`;
+  typewriterState.col = column + 1;
+  writePaperLines(lines);
   input.focus({ preventScroll: true });
   setTemporaryStatus("White-out");
-  strikeMachine("Backspace");
+  strikeMachine("Delete");
   playThud();
 }
 
@@ -1175,6 +1462,16 @@ function handleCommandShortcut(event) {
   if (event.key === "Tab") {
     event.preventDefault();
     setSidebarExpanded(document.body.classList.contains("controls-hidden"));
+    return true;
+  }
+  if (event.key === "F3") {
+    event.preventDefault();
+    setMargin("left");
+    return true;
+  }
+  if (event.key === "F4") {
+    event.preventDefault();
+    setMargin("right");
     return true;
   }
   if (event.key === "F5") {
@@ -1353,14 +1650,20 @@ function canPlay() {
 }
 
 function currentColumn() {
-  const text = input.value.slice(0, input.selectionStart);
-  const lastBreak = text.lastIndexOf("\n");
-  return text.length - lastBreak - 1;
+  return Math.max(0, Math.floor(typewriterState.col));
 }
 
 function jitter(index, amount) {
   const x = Math.sin(index * 12.9898) * 43758.5453;
   return (x - Math.floor(x) - 0.5) * amount;
+}
+
+function easeOutCubic(value) {
+  return 1 - (1 - value) ** 3;
+}
+
+function easeInCubic(value) {
+  return value ** 3;
 }
 
 function lighten(hex, amount) {

@@ -546,7 +546,43 @@ body.controls-hidden .rail-peek {
   }
 
   .command-rail {
-    width: min(18.5rem, calc(100vw - 1.3rem));
+    top: auto;
+    right: 0.85rem;
+    left: 0.85rem;
+    bottom: 0.85rem;
+    width: auto;
+    max-height: 40svh;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  body.controls-hidden .command-rail {
+    transform: translateY(calc(100% + 1.25rem));
+  }
+
+  .rail-copy {
+    padding: 0.9rem 1rem 0.72rem;
+    font-size: 0.92rem;
+  }
+
+  .mini-keyboard {
+    padding: 0.72rem 0.55rem;
+  }
+
+  .rail-actions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.44rem;
+    padding: 0.72rem;
+  }
+
+  .rail-command {
+    min-height: 2.34rem;
+    padding: 0.35rem 0.46rem;
+    font-size: 0.78rem;
+  }
+
+  .rail-peek {
+    left: 0.85rem;
+    bottom: 0.85rem;
   }
 }
 
@@ -559,7 +595,7 @@ body.controls-hidden .rail-peek {
     top: 0.65rem;
     left: 0.65rem;
     right: 0.65rem;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.5rem;
     padding: 0.45rem;
     background:
@@ -568,6 +604,7 @@ body.controls-hidden .rail-peek {
   }
 
   .brand {
+    grid-column: 1 / -1;
     min-height: 2.4rem;
     padding-left: 0.55rem;
     font-size: 2rem;
@@ -580,11 +617,13 @@ body.controls-hidden .rail-peek {
     max-width: 100%;
   }
 
-  .toolbar-cluster:nth-of-type(1),
-  .swatch-group,
+  .toolbar-cluster:nth-of-type(1) {
+    grid-column: 1 / -1;
+  }
+
   .status-panel,
   .export-button {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
   .toolbar-cluster:nth-of-type(1) {
@@ -613,6 +652,7 @@ body.controls-hidden .rail-peek {
     justify-content: space-between;
     min-height: 2.5rem;
     min-width: 0;
+    padding-inline: 0.58rem;
   }
 
   .word-count span {
@@ -626,7 +666,6 @@ body.controls-hidden .rail-peek {
     bottom: 0.65rem;
     width: auto;
     max-height: 42svh;
-    grid-template-rows: auto auto minmax(0, 1fr);
   }
 
   .rail-copy {
