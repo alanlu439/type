@@ -39,14 +39,14 @@ const paperTones = {
 };
 
 const paperMetrics = {
-  canvasWidth: 1536,
-  canvasHeight: 768,
+  canvasWidth: 2048,
+  canvasHeight: 1024,
   planeWidth: 7.8,
   planeHeight: 3.2,
-  marginX: 180,
-  printLineY: 450,
-  lineHeight: 54,
-  charPitch: 21
+  marginX: 240,
+  printLineY: 600,
+  lineHeight: 72,
+  charPitch: 28
 };
 
 const keyRows = [
@@ -256,7 +256,7 @@ function initScene() {
     preserveDrawingBuffer: true,
     powerPreference: "high-performance"
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio || 1, 1.5), 3));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -291,7 +291,7 @@ function buildLighting(scene) {
   const key = new THREE.DirectionalLight(0xffe0a8, 4.8);
   key.position.set(-4.5, 8, 6.5);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(4096, 4096);
   key.shadow.camera.near = 1;
   key.shadow.camera.far = 22;
   key.shadow.camera.left = -7;
@@ -461,7 +461,10 @@ function addPaper(machine) {
   const paperContext = paperCanvas.getContext("2d");
   const paperTexture = new THREE.CanvasTexture(paperCanvas);
   paperTexture.colorSpace = THREE.SRGBColorSpace;
-  paperTexture.anisotropy = 8;
+  paperTexture.anisotropy = 16;
+  paperTexture.magFilter = THREE.LinearFilter;
+  paperTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  paperTexture.generateMipmaps = true;
 
   const paperMaterial = new THREE.MeshStandardMaterial({
     map: paperTexture,
@@ -824,7 +827,9 @@ function keyUnit(variant) {
 function makeKeyLabel(label, width, variant) {
   const texture = new THREE.CanvasTexture(drawKeyLabel(label, variant));
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
+  texture.anisotropy = 16;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
@@ -908,7 +913,9 @@ function makePlateLabel(text, width, height) {
 
   const texture = new THREE.CanvasTexture(plateCanvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
+  texture.anisotropy = 16;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
@@ -1276,6 +1283,8 @@ function drawPaper() {
   }
 
   const { width, height } = paperCanvas;
+  const textureScale = paperMetrics.canvasWidth / 1536;
+  const gridStep = Math.round(34 * textureScale);
   const gradient = context.createLinearGradient(0, 0, 0, height);
   gradient.addColorStop(0, lighten(tone.base, 0.11));
   gradient.addColorStop(0.55, tone.base);
@@ -1284,14 +1293,14 @@ function drawPaper() {
   context.fillRect(0, 0, width, height);
 
   context.fillStyle = tone.grid;
-  for (let x = 0; x < width; x += 34) {
+  for (let x = 0; x < width; x += gridStep) {
     context.fillRect(x, 0, 1, height);
   }
-  for (let y = 0; y < height; y += 34) {
+  for (let y = 0; y < height; y += gridStep) {
     context.fillRect(0, y, width, 1);
   }
 
-  const vignette = context.createRadialGradient(width * 0.5, height * 0.45, 40, width * 0.5, height * 0.5, width * 0.72);
+  const vignette = context.createRadialGradient(width * 0.5, height * 0.45, 54, width * 0.5, height * 0.5, width * 0.72);
   vignette.addColorStop(0, "rgba(255,255,255,0.2)");
   vignette.addColorStop(1, "rgba(79,48,20,0.18)");
   context.fillStyle = vignette;
@@ -1299,7 +1308,7 @@ function drawPaper() {
 
   context.fillStyle = sceneState.ink;
   context.textBaseline = "top";
-  context.font = "700 35px Courier New, monospace";
+  context.font = "700 47px Courier New, monospace";
   const paperLines = input.value ? input.value.split(/\r?\n/) : [""];
   const firstVisibleLine = Math.max(0, typewriterState.row - 8);
   const lastVisibleLine = Math.min(paperLines.length, firstVisibleLine + 12);
@@ -1313,7 +1322,7 @@ function drawPaper() {
     [...line].forEach((char, charIndex) => {
       context.globalAlpha = 0.78 + Math.abs(jitter(charIndex + lineIndex * 31, 0.18));
       context.save();
-      context.translate(x + jitter(charIndex, 1.6), y + jitter(charIndex + 17, 2.2));
+      context.translate(x + jitter(charIndex, 2.1), y + jitter(charIndex + 17, 2.9));
       context.rotate((jitter(charIndex + 29, 0.45) * Math.PI) / 180);
       context.fillText(char, 0, 0);
       context.restore();
@@ -1323,9 +1332,9 @@ function drawPaper() {
   context.globalAlpha = 1;
 
   if (document.activeElement === input || input.value) {
-    const caretX = paperMetrics.marginX + typewriterState.col * paperMetrics.charPitch + 7;
+    const caretX = paperMetrics.marginX + typewriterState.col * paperMetrics.charPitch + 9;
     const caretY = paperMetrics.printLineY + 3;
-    context.fillRect(caretX, caretY, 5, 42);
+    context.fillRect(caretX, caretY, 7, 56);
   }
 
   sceneState.paperTexture.needsUpdate = true;
