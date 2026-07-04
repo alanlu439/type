@@ -49,6 +49,9 @@ const paperMetrics = {
   charPitch: 28
 };
 
+const storageKey = "type-state-v2";
+const ribbonShortcutColors = ["#201b17", "#641b1f"];
+
 const printHeadMetrics = {
   glyphCenterX: -0.22,
   glyphCenterY: 32,
@@ -93,13 +96,17 @@ const defaultMargins = {
   right: 56
 };
 
+const tabStops = [8, 16, 24, 32, 40, 48, 56];
+
 const typewriterState = {
   row: 0,
   col: 0,
   leftMargin: defaultMargins.left,
   rightMargin: defaultMargins.right,
   marginRelease: false,
-  lastBellColumn: -1
+  lastBellColumn: -1,
+  rollOffset: 0,
+  correctionMode: false
 };
 
 const sceneState = {
@@ -125,12 +132,14 @@ const sceneState = {
   paperImpactStart: 0,
   ribbonPulse: 0,
   returnSweep: 0,
+  shiftLift: 0,
+  printGates: [],
   baseMachineY: -0.08,
   baseMachineZ: 0,
   zoom: 1,
   focusMode: false,
-  viewRotation: 0,
-  targetViewRotation: 0,
+  paperAngle: 0,
+  targetPaperAngle: 0,
   cameraTargetPosition: new THREE.Vector3(0, 5.5, 10.6),
   cameraLookAt: new THREE.Vector3(0, 1.1, 0),
   cameraTargetLookAt: new THREE.Vector3(0, 1.1, 0),
@@ -143,14 +152,17 @@ const sceneState = {
 let audioContext;
 let soundEnabled = true;
 let statusTimer;
+let stateSaveTimer;
 
 initScene();
-input.value = seedText;
-input.setSelectionRange(input.value.length, input.value.length);
+if (!restoreState()) {
+  input.value = seedText;
+  input.setSelectionRange(input.value.length, input.value.length);
+  setSidebarExpanded(true, { focus: false, persist: false });
+}
 syncCarriageFromInput();
 renderPage();
 updateFocusButton();
-setSidebarExpanded(true, { focus: false });
 input.focus({ preventScroll: true });
 
 stage.addEventListener("pointerdown", () => {
@@ -165,6 +177,7 @@ input.addEventListener("input", () => {
   setStatus("Writing");
   syncCarriageFromInput();
   renderPage();
+  queueSaveState();
 });
 
 input.addEventListener("keydown", (event) => {
@@ -172,7 +185,7 @@ input.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (handleCommandShortcut(event)) {
+  if (handleCommandShortcut(event, { fromInput: true })) {
     return;
   }
 
@@ -225,6 +238,7 @@ soundButtons.forEach((button) => {
     if (soundEnabled) {
       playBell(0.18);
     }
+    queueSaveState();
     input.focus({ preventScroll: true });
   });
 });
@@ -233,8 +247,8 @@ ribbonCycleButton?.addEventListener("click", () => cycleRibbon());
 zoomOutButton?.addEventListener("click", () => zoomOut());
 whiteoutButton?.addEventListener("click", () => applyWhiteout());
 snapshotButton?.addEventListener("click", () => saveAsImage());
-rotateLeftButton?.addEventListener("click", () => rotateView(-0.18));
-rotateRightButton?.addEventListener("click", () => rotateView(0.18));
+rotateLeftButton?.addEventListener("click", () => rotatePaper(-0.05));
+rotateRightButton?.addEventListener("click", () => rotatePaper(0.05));
 leftMarginButton?.addEventListener("click", () => setMargin("left"));
 rightMarginButton?.addEventListener("click", () => setMargin("right"));
 sidebarToggleButtons.forEach((button) => {
@@ -252,6 +266,7 @@ inkButtons.forEach((button) => {
     renderPage();
     strikeMachine("Ink");
     playKey(0.08);
+    queueSaveState();
     input.focus({ preventScroll: true });
   });
 });
@@ -263,6 +278,7 @@ paperButtons.forEach((button) => {
     renderPage();
     strikeMachine("Paper");
     playKey(0.08);
+    queueSaveState();
     input.focus({ preventScroll: true });
   });
 });
@@ -1042,6 +1058,7 @@ function releaseTypewriterModifier(event) {
     typewriterState.marginRelease = false;
     setTemporaryStatus("Margin locked", 500);
     playKey(0.04);
+    queueSaveState();
   }
 }
 
@@ -1063,6 +1080,21 @@ function typeIntoTypewriter(event) {
     moveCarriage(-1);
     strikeMachine("Backspace");
     playThud();
+    return true;
+  }
+
+  if (key === "Tab") {
+    moveToNextTabStop();
+    return true;
+  }
+
+  if (event.code === "Backslash") {
+    moveCarriage(-1);
+    typewriterState.correctionMode = true;
+    strikeMachine("Backspace");
+    playThud();
+    setTemporaryStatus("Correction ribbon");
+    queueSaveState();
     return true;
   }
 
@@ -1125,6 +1157,7 @@ function writePaperLines(lines) {
   input.value = lines.join("\n");
   setTextareaCaretFromCarriage();
   renderPage();
+  queueSaveState();
 }
 
 function printTypewriterCharacter(character) {
@@ -1137,8 +1170,23 @@ function printTypewriterCharacter(character) {
   const lines = getPaperLines();
   ensurePaperLine(lines, typewriterState.row);
   const column = Math.max(0, Math.floor(typewriterState.col));
+
+  if (typewriterState.correctionMode) {
+    const currentLine = lines[typewriterState.row].padEnd(column + 1, " ");
+    lines[typewriterState.row] = `${currentLine.slice(0, column)} ${currentLine.slice(column + 1)}`;
+    typewriterState.correctionMode = false;
+    setTemporaryStatus("Corrected");
+    strikeMachine(character);
+    playThud();
+    writePaperLines(lines);
+    return;
+  }
+
   const currentLine = lines[typewriterState.row].padEnd(column + 1, " ");
   lines[typewriterState.row] = `${currentLine.slice(0, column)}${character}${currentLine.slice(column + 1)}`;
+  if (character !== " ") {
+    gatePrintedCharacter(typewriterState.row, column);
+  }
   typewriterState.col += 1;
   setStatus("Writing");
   strikeMachine(character);
@@ -1159,18 +1207,46 @@ function moveCarriage(delta) {
   setTextareaCaretFromCarriage();
   updateCarriage();
   setTemporaryStatus("Carriage moved");
+  queueSaveState();
+}
+
+function gatePrintedCharacter(row, col) {
+  sceneState.printGates.push({
+    row,
+    col,
+    revealAt: performance.now() + printHeadMetrics.strikeContactTime + 16
+  });
+}
+
+function moveToNextTabStop() {
+  const fallbackStop = Math.min(typewriterState.rightMargin, Math.ceil((typewriterState.col + 1) / 8) * 8);
+  const nextStop = tabStops.find((stop) => stop > typewriterState.col && stop <= typewriterState.rightMargin) ?? fallbackStop;
+  if (nextStop <= typewriterState.col) {
+    setTemporaryStatus("No tab stop");
+    playBell(0.1);
+    return;
+  }
+
+  typewriterState.col = nextStop;
+  typewriterState.lastBellColumn = -1;
+  setTextareaCaretFromCarriage();
+  updateCarriage();
+  strikeMachine("Tab");
+  playReturn();
+  setTemporaryStatus("Tab stop");
+  queueSaveState();
 }
 
 function moveRoller(delta) {
-  typewriterState.row = Math.max(0, typewriterState.row + delta);
-  const lines = getPaperLines();
-  ensurePaperLine(lines, typewriterState.row);
-  input.value = lines.join("\n");
-  setTextareaCaretFromCarriage();
+  typewriterState.rollOffset = Math.max(
+    -paperMetrics.lineHeight * 6,
+    Math.min(paperMetrics.lineHeight * 6, typewriterState.rollOffset + delta * (paperMetrics.lineHeight / 3))
+  );
   renderPage();
   strikeMachine(delta > 0 ? "PageDown" : "PageUp");
   playReturn();
   setTemporaryStatus(delta > 0 ? "Roller down" : "Roller up");
+  queueSaveState();
 }
 
 function returnCarriage() {
@@ -1187,6 +1263,7 @@ function returnCarriage() {
   sceneState.carriageJerk = -0.5;
   playReturn();
   setTemporaryStatus("Carriage return");
+  queueSaveState();
 }
 
 function halfSpace() {
@@ -1196,6 +1273,7 @@ function halfSpace() {
   strikeMachine("`");
   playKey(0.08);
   setTemporaryStatus("Half-space");
+  queueSaveState();
 }
 
 function setMargin(side) {
@@ -1215,6 +1293,7 @@ function setMargin(side) {
   updateCarriage();
   strikeMachine(side === "left" ? "F3" : "F4");
   playBell(0.1);
+  queueSaveState();
 }
 
 function resetMargins() {
@@ -1263,6 +1342,9 @@ function strikeMachine(value) {
   if (key) {
     key.userData.press = 1;
   }
+  if (normalized === "Shift" || normalized === "CapsLock") {
+    sceneState.shiftLift = 1;
+  }
 
   const now = performance.now();
   sceneState.typebars.forEach((arm) => {
@@ -1283,7 +1365,8 @@ function strikeMachine(value) {
   if (printableStrike) {
     sceneState.carriageHoldUntil = Math.max(sceneState.carriageHoldUntil, now + printHeadMetrics.escapementDelay);
     sceneState.paperImpactStart = now + printHeadMetrics.strikeContactTime;
-    window.setTimeout(drawPaper, printHeadMetrics.escapementDelay + 26);
+    window.setTimeout(drawPaper, printHeadMetrics.strikeContactTime + 24);
+    window.setTimeout(() => playThud(), printHeadMetrics.strikeContactTime);
   } else {
     sceneState.paperImpact = 1;
   }
@@ -1364,16 +1447,22 @@ function drawPaper() {
   context.textBaseline = "top";
   context.font = "700 47px Courier New, monospace";
   const paperLines = input.value ? input.value.split(/\r?\n/) : [""];
+  const now = performance.now();
+  sceneState.printGates = sceneState.printGates.filter((gate) => now < gate.revealAt);
   const firstVisibleLine = Math.max(0, typewriterState.row - 8);
   const lastVisibleLine = Math.min(paperLines.length, firstVisibleLine + 12);
   for (let lineIndex = firstVisibleLine; lineIndex < lastVisibleLine; lineIndex += 1) {
     const line = paperLines[lineIndex] || "";
     let x = paperMetrics.marginX;
-    const y = paperMetrics.printLineY + (lineIndex - typewriterState.row) * paperMetrics.lineHeight;
+    const y = paperMetrics.printLineY + typewriterState.rollOffset + (lineIndex - typewriterState.row) * paperMetrics.lineHeight;
     if (y < -paperMetrics.lineHeight || y > height) {
       continue;
     }
     [...line].forEach((char, charIndex) => {
+      if (sceneState.printGates.some((gate) => gate.row === lineIndex && gate.col === charIndex)) {
+        x += paperMetrics.charPitch;
+        return;
+      }
       context.globalAlpha = 0.78 + Math.abs(jitter(charIndex + lineIndex * 31, 0.18));
       context.save();
       context.translate(x + jitter(charIndex, 2.1), y + jitter(charIndex + 17, 2.9));
@@ -1416,10 +1505,10 @@ function animate() {
   state.paperImpact *= 0.72;
   state.ribbonPulse *= 0.68;
   state.returnSweep *= 0.82;
+  state.shiftLift *= 0.76;
 
   if (state.machine) {
-    state.viewRotation += (state.targetViewRotation - state.viewRotation) * 0.12;
-    state.machine.rotation.y = state.viewRotation;
+    state.machine.rotation.y = 0;
     state.machine.rotation.x = -0.015;
     state.machine.position.x = state.baseMachineX;
     state.machine.position.y = state.baseMachineY;
@@ -1450,6 +1539,7 @@ function animate() {
       arm.strikeStart = -Infinity;
     }
     const end = arm.rest.clone().lerp(arm.target, lift);
+    end.y += state.shiftLift * 0.055;
     const impact = Math.max(0, 1 - Math.abs(elapsed - printHeadMetrics.strikeContactTime) / 18) * arm.intensity;
     end.y += impact * 0.028;
     end.z -= impact * 0.024;
@@ -1459,8 +1549,10 @@ function animate() {
   });
 
   if (state.paperMesh) {
+    state.paperAngle += (state.targetPaperAngle - state.paperAngle) * 0.16;
     state.paperMesh.position.z = -0.55 + state.paperImpact * 0.035;
     state.paperMesh.position.y = 3.16 + state.returnSweep * 0.045;
+    state.paperMesh.rotation.z = state.paperAngle;
   }
 
   if (state.ribbonGuide) {
@@ -1592,6 +1684,92 @@ function byteLength(text) {
   return new Blob([text]).size;
 }
 
+function restoreState() {
+  const saved = readSavedState();
+  if (!saved) {
+    return false;
+  }
+
+  input.value = typeof saved.text === "string" ? saved.text : "";
+  typewriterState.row = Number.isFinite(saved.row) ? Math.max(0, saved.row) : 0;
+  typewriterState.col = Number.isFinite(saved.col) ? Math.max(0, saved.col) : 0;
+  typewriterState.leftMargin = Number.isFinite(saved.leftMargin) ? Math.max(0, saved.leftMargin) : defaultMargins.left;
+  typewriterState.rightMargin = Number.isFinite(saved.rightMargin) ? Math.max(typewriterState.leftMargin + 2, saved.rightMargin) : defaultMargins.right;
+  typewriterState.rollOffset = Number.isFinite(saved.rollOffset) ? Math.max(-paperMetrics.lineHeight * 6, Math.min(paperMetrics.lineHeight * 6, saved.rollOffset)) : 0;
+  typewriterState.marginRelease = false;
+  typewriterState.correctionMode = false;
+  typewriterState.lastBellColumn = -1;
+
+  soundEnabled = saved.soundEnabled !== false;
+  updateSoundButtons();
+
+  if (typeof saved.ink === "string") {
+    const inkButton = inkButtons.find((button) => button.dataset.ink === saved.ink);
+    if (inkButton) {
+      sceneState.ink = saved.ink;
+      document.documentElement.style.setProperty("--ink", saved.ink);
+      markSelected(inkButtons, inkButton);
+    }
+  }
+
+  if (typeof saved.paperTone === "string" && paperTones[saved.paperTone]) {
+    const paperButton = paperButtons.find((button) => button.dataset.paper === saved.paperTone);
+    if (paperButton) {
+      sceneState.paperTone = saved.paperTone;
+      markSelected(paperButtons, paperButton);
+    }
+  }
+
+  sceneState.zoom = saved.zoom > 1 ? 1.26 : 1;
+  sceneState.focusMode = false;
+  sceneState.targetPaperAngle = Number.isFinite(saved.paperAngle) ? Math.max(-0.42, Math.min(0.42, saved.paperAngle)) : 0;
+  sceneState.paperAngle = sceneState.targetPaperAngle;
+  setSidebarExpanded(saved.sidebarExpanded !== false, { focus: false, persist: false });
+  setTextareaCaretFromCarriage();
+  resizeScene();
+  return true;
+}
+
+function readSavedState() {
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+function queueSaveState() {
+  if (stateSaveTimer) {
+    window.clearTimeout(stateSaveTimer);
+  }
+  stateSaveTimer = window.setTimeout(() => {
+    stateSaveTimer = undefined;
+    saveStateNow();
+  }, 120);
+}
+
+function saveStateNow() {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      text: input.value,
+      row: typewriterState.row,
+      col: typewriterState.col,
+      leftMargin: typewriterState.leftMargin,
+      rightMargin: typewriterState.rightMargin,
+      rollOffset: typewriterState.rollOffset,
+      ink: sceneState.ink,
+      paperTone: sceneState.paperTone,
+      paperAngle: sceneState.targetPaperAngle,
+      sidebarExpanded: !document.body.classList.contains("controls-hidden"),
+      soundEnabled,
+      zoom: sceneState.zoom
+    }));
+  } catch {
+    // Private browsing or locked-down storage should not block the simulator.
+  }
+}
+
 function markSelected(group, selected) {
   group.forEach((button) => {
     const isSelected = button === selected;
@@ -1604,20 +1782,33 @@ function clearPage() {
   input.value = "";
   typewriterState.row = 0;
   typewriterState.col = 0;
+  typewriterState.rollOffset = 0;
+  typewriterState.correctionMode = false;
   resetMargins();
+  sceneState.zoom = 1;
+  sceneState.focusMode = false;
+  sceneState.targetPaperAngle = 0;
+  sceneState.paperAngle = 0;
+  sceneState.printGates = [];
   setTextareaCaretFromCarriage();
   renderPage();
+  updateFocusButton();
+  resizeScene();
   input.focus({ preventScroll: true });
   setStatus("Ready");
   strikeMachine("Enter");
   sceneState.returnSweep = 1;
   sceneState.carriageJerk = -0.5;
   playReturn();
+  saveStateNow();
 }
 
 function cycleRibbon() {
-  const currentIndex = Math.max(0, inkButtons.findIndex((button) => button.classList.contains("is-selected")));
-  const next = inkButtons[(currentIndex + 1) % inkButtons.length];
+  const selected = inkButtons.find((button) => button.classList.contains("is-selected"));
+  const currentColor = selected?.dataset.ink || sceneState.ink;
+  const currentIndex = ribbonShortcutColors.indexOf(currentColor);
+  const nextColor = ribbonShortcutColors[(currentIndex + 1) % ribbonShortcutColors.length];
+  const next = inkButtons.find((button) => button.dataset.ink === nextColor);
   if (next) {
     next.click();
     setTemporaryStatus("Ribbon changed");
@@ -1640,6 +1831,7 @@ function applyWhiteout() {
   setTemporaryStatus("White-out");
   strikeMachine("Delete");
   playThud();
+  queueSaveState();
 }
 
 function zoomOut() {
@@ -1647,11 +1839,12 @@ function zoomOut() {
     setFocusMode(false);
     return;
   }
-  sceneState.zoom = sceneState.zoom >= 1.24 ? 1 : Math.min(1.26, sceneState.zoom + 0.13);
+  sceneState.zoom = sceneState.zoom > 1 ? 1 : 1.26;
   resizeScene();
   input.focus({ preventScroll: true });
   setTemporaryStatus(sceneState.zoom === 1 ? "Zoom reset" : "Zoomed out");
   playKey(0.08);
+  queueSaveState();
 }
 
 function setFocusMode(enabled) {
@@ -1662,6 +1855,7 @@ function setFocusMode(enabled) {
   input.focus({ preventScroll: true });
   setTemporaryStatus(enabled ? "Focus mode" : "Full view");
   playKey(0.08);
+  queueSaveState();
 }
 
 function updateFocusButton() {
@@ -1671,12 +1865,13 @@ function updateFocusButton() {
   }
 }
 
-function rotateView(amount) {
-  sceneState.targetViewRotation = Math.max(-0.42, Math.min(0.42, sceneState.targetViewRotation + amount));
+function rotatePaper(amount) {
+  sceneState.targetPaperAngle = Math.max(-0.42, Math.min(0.42, sceneState.targetPaperAngle + amount));
   input.focus({ preventScroll: true });
   setTemporaryStatus(amount < 0 ? "Rotated left" : "Rotated right");
   strikeMachine("Rotate");
   playKey(0.08);
+  queueSaveState();
 }
 
 function saveAsImage() {
@@ -1719,9 +1914,12 @@ function setSidebarExpanded(expanded, options = {}) {
   if (options.focus !== false) {
     input.focus({ preventScroll: true });
   }
+  if (options.persist !== false) {
+    queueSaveState();
+  }
 }
 
-function handleCommandShortcut(event) {
+function handleCommandShortcut(event, options = {}) {
   if (event.key === "F1") {
     event.preventDefault();
     cycleRibbon();
@@ -1738,6 +1936,9 @@ function handleCommandShortcut(event) {
     return true;
   }
   if (event.key === "Tab") {
+    if (options.fromInput) {
+      return false;
+    }
     event.preventDefault();
     setSidebarExpanded(document.body.classList.contains("controls-hidden"));
     return true;
@@ -1754,12 +1955,12 @@ function handleCommandShortcut(event) {
   }
   if (event.key === "F5") {
     event.preventDefault();
-    rotateView(-0.18);
+    rotatePaper(-0.05);
     return true;
   }
   if (event.key === "F6") {
     event.preventDefault();
-    rotateView(0.18);
+    rotatePaper(0.05);
     return true;
   }
   if (event.key === "F10") {
@@ -1777,11 +1978,6 @@ function shouldRouteGlobalShortcut(event) {
 
   const commandKeys = new Set(["F1", "Escape", "Delete", "Tab", "F3", "F4", "F5", "F6", "F10"]);
   if (!commandKeys.has(event.key)) {
-    return false;
-  }
-
-  const target = event.target;
-  if (event.key === "Tab" && target?.closest?.("button, a, input, textarea, select, [contenteditable='true']")) {
     return false;
   }
 
