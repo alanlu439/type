@@ -74,11 +74,12 @@ a {
   right: clamp(0.55rem, 1.6vw, 1.1rem);
   z-index: 5;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.42rem;
+  justify-content: space-between;
+  gap: clamp(0.22rem, 0.5vw, 0.42rem);
   min-height: 0;
-  padding: 0.36rem;
+  padding: 0.32rem;
   border: 1px solid rgba(255, 232, 188, 0.14);
   border-radius: 8px;
   background:
@@ -95,13 +96,13 @@ a {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  min-width: clamp(5.1rem, 8vw, 6.2rem);
-  min-height: 2.34rem;
-  padding: 0 0.82rem;
+  min-width: clamp(4.45rem, 7vw, 5.7rem);
+  min-height: 2.2rem;
+  padding: 0 0.62rem;
   border: 1px solid rgba(255, 220, 174, 0.28);
   border-radius: 6px;
   font-family: var(--serif);
-  font-size: clamp(1.42rem, 1.7vw, 1.9rem);
+  font-size: clamp(1.32rem, 1.55vw, 1.8rem);
   font-weight: 700;
   letter-spacing: 0;
   color: #fffaf0;
@@ -118,21 +119,30 @@ a {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.42rem;
+  gap: clamp(0.22rem, 0.45vw, 0.42rem);
+  flex: 0 0 auto;
 }
 
 .swatch-group {
   justify-content: center;
+  column-gap: 0.72rem;
+  min-height: 2.18rem;
+  padding: 0 0.62rem;
+  border: 1px solid rgba(255, 232, 188, 0.1);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(32, 28, 23, 0.5), rgba(10, 9, 8, 0.42));
 }
 
 .control-button {
   min-width: 0;
-  min-height: 2.36rem;
+  min-height: 2.18rem;
   border: 1px solid var(--border);
   border-radius: 7px;
   color: var(--text);
-  background: linear-gradient(180deg, rgba(38, 34, 29, 0.78), rgba(13, 12, 10, 0.9));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--control-accent, #d8ad68) 18%, rgba(38, 34, 29, 0.78)), rgba(13, 12, 10, 0.92));
   box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--control-accent, #d8ad68) 44%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 10px 28px rgba(0, 0, 0, 0.22);
 }
@@ -141,16 +151,32 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0 0.76rem;
-  font-size: 0.8rem;
+  gap: 0.38rem;
+  padding: 0 0.58rem;
+  font-size: 0.76rem;
   font-weight: 780;
   white-space: nowrap;
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
 .export-button {
-  margin-left: auto;
+  margin-left: 0;
+}
+
+.sound-toggle {
+  --control-accent: #75d184;
+}
+
+.reset-button {
+  --control-accent: #f0b86a;
+}
+
+.focus-toggle {
+  --control-accent: #8bb7ff;
+}
+
+.export-button {
+  --control-accent: #f4d79a;
 }
 
 .control-button:hover,
@@ -177,8 +203,8 @@ a {
 }
 
 .live-dot {
-  width: 0.48rem;
-  height: 0.48rem;
+  width: 0.42rem;
+  height: 0.42rem;
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 18px rgba(117, 209, 132, 0.62);
@@ -192,13 +218,13 @@ a {
 .tool-label {
   color: var(--muted);
   font-family: var(--serif);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
 .swatch {
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 1.68rem;
+  height: 1.68rem;
   padding: 0;
   border: 1px solid rgba(255, 240, 210, 0.26);
   border-radius: 999px;
@@ -211,7 +237,7 @@ a {
 
 .swatch.is-selected {
   outline: 2px solid var(--brass);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .scene-stage {
@@ -406,7 +432,32 @@ body.controls-hidden .rail-peek {
 
 @media (max-width: 1120px) {
   .top-bar {
-    gap: 0.45rem;
+    gap: 0.28rem;
+  }
+
+  .control-button {
+    gap: 0.32rem;
+    padding: 0 0.48rem;
+    font-size: 0.72rem;
+  }
+
+  .brand {
+    min-width: 4.25rem;
+    padding-inline: 0.5rem;
+  }
+
+  .swatch-group {
+    column-gap: 0.56rem;
+    padding-inline: 0.5rem;
+  }
+
+  .swatch {
+    width: 1.52rem;
+    height: 1.52rem;
+  }
+
+  .tool-label {
+    font-size: 0.72rem;
   }
 
   .export-button {
@@ -455,19 +506,20 @@ body.controls-hidden .rail-peek {
     top: 0.65rem;
     left: 0.65rem;
     right: 0.65rem;
-    gap: 0.5rem;
-    padding: 0.45rem;
+    gap: 0.18rem;
+    padding: 0.28rem;
     background:
       linear-gradient(180deg, rgba(28, 24, 20, 0.94), rgba(9, 8, 7, 0.84)),
       rgba(9, 8, 7, 0.76);
   }
 
   .brand {
-    width: 100%;
-    min-height: 2.4rem;
-    justify-content: flex-start;
-    padding-left: 0.75rem;
-    font-size: 2rem;
+    width: auto;
+    min-width: 3.45rem;
+    min-height: 2rem;
+    justify-content: center;
+    padding-inline: 0.3rem;
+    font-size: 1.2rem;
   }
 
   .toolbar-cluster,
@@ -477,26 +529,41 @@ body.controls-hidden .rail-peek {
   }
 
   .toolbar-cluster:nth-of-type(1) {
-    flex: 1 1 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex: 0 0 auto;
+    display: inline-flex;
   }
 
   .control-button {
-    width: 100%;
-    min-height: 2.5rem;
-    padding: 0 0.58rem;
-    font-size: 0.74rem;
+    width: auto;
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0 0.38rem;
+    font-size: 0.7rem;
+  }
+
+  .control-button > span:not(.live-dot) {
+    display: none;
+  }
+
+  .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
   }
 
   .swatch-group {
-    justify-content: flex-start;
-    padding-left: 0.25rem;
+    justify-content: center;
+    gap: 0.16rem;
+    min-height: 2rem;
+    padding-inline: 0.16rem;
+  }
+
+  .tool-label {
+    display: none;
   }
 
   .swatch {
-    width: 1.9rem;
-    height: 1.9rem;
+    width: 1.28rem;
+    height: 1.28rem;
   }
 
   .command-rail {
@@ -535,5 +602,80 @@ body.controls-hidden .rail-peek {
   .rail-peek {
     left: 0.65rem;
     bottom: 0.65rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .top-bar {
+    left: 0.35rem;
+    right: 0.35rem;
+    gap: 0.12rem;
+    padding: 0.22rem;
+  }
+
+  .brand {
+    min-width: 2.9rem;
+    min-height: 1.7rem;
+    padding-inline: 0.18rem;
+    font-size: 1.05rem;
+  }
+
+  .toolbar-cluster {
+    gap: 0.1rem;
+  }
+
+  .control-button {
+    min-width: 1.7rem;
+    min-height: 1.7rem;
+    gap: 0.2rem;
+    padding: 0 0.2rem;
+  }
+
+  .ui-icon {
+    width: 0.82rem;
+    height: 0.82rem;
+  }
+
+  .live-dot {
+    width: 0.34rem;
+    height: 0.34rem;
+  }
+
+  .swatch-group {
+    gap: 0.1rem;
+    min-height: 1.7rem;
+    padding-inline: 0.1rem;
+  }
+
+  .swatch {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .brand {
+    min-width: 2.35rem;
+    font-size: 0.9rem;
+  }
+
+  .control-button {
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+    padding: 0 0.16rem;
+  }
+
+  .ui-icon {
+    width: 0.74rem;
+    height: 0.74rem;
+  }
+
+  .swatch-group {
+    min-height: 1.5rem;
+  }
+
+  .swatch {
+    width: 0.88rem;
+    height: 0.88rem;
   }
 }

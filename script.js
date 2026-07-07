@@ -61,14 +61,14 @@ const printHeadMetrics = {
   glyphCenterX: -0.22,
   glyphCenterY: 32,
   contactY: 3.535,
-  contactZ: -0.59,
+  contactZ: -0.42,
   ribbonRestY: 1.9,
   ribbonRestZ: -0.48,
-  strikeDuration: 310,
-  strikeContactTime: 74,
-  strikeAttackRatio: 0.24,
-  strikeDwellRatio: 0.26,
-  escapementDelay: 118
+  strikeDuration: 220,
+  strikeContactTime: 58,
+  strikeAttackRatio: 0.28,
+  strikeDwellRatio: 0.08,
+  escapementDelay: 98
 };
 
 const keyRows = [
@@ -96,6 +96,12 @@ const keyRows = [
     ["Space", "", "space"]
   ]
 ];
+
+const printableTypeOrder = keyRows
+  .flat()
+  .map(([value]) => value)
+  .filter((value) => value.length === 1)
+  .map((value) => value.toLowerCase());
 
 const defaultMargins = {
   left: 0,
@@ -139,6 +145,7 @@ const sceneState = {
   paperImpact: 0,
   paperImpactStart: 0,
   ribbonPulse: 0,
+  ribbonStrikeStart: -Infinity,
   returnSweep: 0,
   shiftLift: 0,
   printGates: [],
@@ -224,15 +231,7 @@ focusButton?.addEventListener("click", () => setFocusMode(!sceneState.focusMode)
 
 exportPdfButton.addEventListener("click", () => {
   const pdf = buildPdf(input.value || " ");
-  const blob = new Blob([pdf], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "type-page.pdf";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadPdf(pdf);
   strikeMachine("Export");
   playBell(0.16);
   setTemporaryStatus("Exported", 1200);
@@ -419,6 +418,8 @@ function buildTypewriter(scene) {
   });
 
   addBody(machine, black, wornBlack, brass);
+  addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber);
+  addFullBodyShell(machine, black, wornBlack, brass, darkRubber);
   addPlaten(machine, darkRubber, brass);
   addPaper(machine);
   addCarriageDetails(brass, darkRubber, black);
@@ -523,6 +524,243 @@ function addBody(machine, black, wornBlack, brass) {
     tick.position.set(-3.2 + i * 0.156, 2.03, -0.74);
     machine.add(tick);
   }
+}
+
+function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
+  const glossyBlack = new THREE.MeshStandardMaterial({
+    color: 0x070605,
+    roughness: 0.32,
+    metalness: 0.8,
+    envMapIntensity: 0.72
+  });
+  const agedSteel = new THREE.MeshStandardMaterial({
+    color: 0xb9aa8d,
+    roughness: 0.38,
+    metalness: 0.82
+  });
+
+  const keyboardSurround = roundedBox(8.95, 0.18, 3.8, 0.32, glossyBlack);
+  keyboardSurround.position.set(0, 0.64, 2.18);
+  keyboardSurround.rotation.x = -0.12;
+  keyboardSurround.castShadow = true;
+  keyboardSurround.receiveShadow = true;
+  machine.add(keyboardSurround);
+
+  const frontBezel = roundedBox(8.85, 0.24, 0.35, 0.16, glossyBlack);
+  frontBezel.position.set(0, 0.78, 3.15);
+  frontBezel.rotation.x = -0.12;
+  frontBezel.castShadow = true;
+  frontBezel.receiveShadow = true;
+  machine.add(frontBezel);
+
+  [-1, 1].forEach((side) => {
+    const shoulder = roundedBox(1.12, 0.48, 3.25, 0.32, glossyBlack);
+    shoulder.position.set(side * 4.28, 0.78, 1.65);
+    shoulder.rotation.x = -0.08;
+    shoulder.rotation.z = side * -0.05;
+    shoulder.castShadow = true;
+    shoulder.receiveShadow = true;
+    machine.add(shoulder);
+
+    const rearCheek = roundedBox(1.22, 0.82, 1.32, 0.32, glossyBlack);
+    rearCheek.position.set(side * 3.65, 1.25, 0.12);
+    rearCheek.rotation.z = side * -0.06;
+    rearCheek.castShadow = true;
+    rearCheek.receiveShadow = true;
+    machine.add(rearCheek);
+
+    const trimRail = cylinderBetween(
+      new THREE.Vector3(side * 3.96, 0.98, 3.15),
+      new THREE.Vector3(side * 3.52, 1.34, 0.05),
+      0.018,
+      brass
+    );
+    machine.add(trimRail);
+  });
+
+  const segmentWell = roundedBox(5.25, 0.22, 1.2, 0.32, wornBlack);
+  segmentWell.position.set(0, 0.98, 0.84);
+  segmentWell.rotation.x = -0.1;
+  segmentWell.castShadow = true;
+  segmentWell.receiveShadow = true;
+  machine.add(segmentWell);
+
+  const basketRim = new THREE.Mesh(new THREE.TorusGeometry(2.25, 0.08, 14, 120, Math.PI), agedSteel);
+  basketRim.position.set(0, 1.18, 0.62);
+  basketRim.rotation.x = Math.PI * 0.54;
+  basketRim.rotation.z = Math.PI;
+  basketRim.castShadow = true;
+  basketRim.receiveShadow = true;
+  machine.add(basketRim);
+
+  const innerRim = new THREE.Mesh(new THREE.TorusGeometry(1.58, 0.028, 10, 96, Math.PI), brass);
+  innerRim.position.set(0, 1.2, 0.68);
+  innerRim.rotation.x = Math.PI * 0.54;
+  innerRim.rotation.z = Math.PI;
+  innerRim.castShadow = true;
+  machine.add(innerRim);
+
+  for (let i = 0; i <= 48; i += 1) {
+    const t = i / 48;
+    const angle = Math.PI * (1 - t);
+    const x = Math.cos(angle) * 2.03;
+    const z = 0.64 + Math.sin(angle) * 0.78;
+    const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.11, 0.16), agedSteel);
+    tooth.position.set(x, 1.27, z);
+    tooth.rotation.y = -angle + Math.PI / 2;
+    tooth.rotation.x = -0.22;
+    tooth.castShadow = true;
+    machine.add(tooth);
+  }
+
+  [-3.38, 3.38].forEach((x) => {
+    const cover = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.7, 0.26, 56), glossyBlack);
+    cover.position.set(x, 1.78, 0.25);
+    cover.castShadow = true;
+    cover.receiveShadow = true;
+    machine.add(cover);
+
+    const coverRing = new THREE.Mesh(new THREE.TorusGeometry(0.53, 0.032, 12, 72), brass);
+    coverRing.position.set(x, 1.93, 0.25);
+    coverRing.rotation.x = Math.PI / 2;
+    coverRing.castShadow = true;
+    machine.add(coverRing);
+
+    const coverSlot = roundedBox(0.46, 0.035, 0.08, 0.018, darkRubber);
+    coverSlot.position.set(x, 1.94, 0.25);
+    coverSlot.rotation.y = Math.PI * 0.14;
+    machine.add(coverSlot);
+  });
+
+  const carriageShelf = roundedBox(8.92, 0.18, 0.42, 0.12, glossyBlack);
+  carriageShelf.position.set(0, 2.32, -0.96);
+  carriageShelf.castShadow = true;
+  carriageShelf.receiveShadow = true;
+  machine.add(carriageShelf);
+}
+
+function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
+  const enamel = new THREE.MeshStandardMaterial({
+    color: 0x050504,
+    roughness: 0.26,
+    metalness: 0.82,
+    envMapIntensity: 0.78
+  });
+  const innerShadow = new THREE.MeshStandardMaterial({
+    color: 0x090705,
+    roughness: 0.7,
+    metalness: 0.44
+  });
+
+  const caseBase = roundedBox(10.7, 0.22, 5.75, 0.42, darkRubber);
+  caseBase.position.set(0, -0.58, 1.38);
+  caseBase.castShadow = true;
+  caseBase.receiveShadow = true;
+  machine.add(caseBase);
+
+  const baseRim = roundedBox(10.18, 0.22, 5.28, 0.38, enamel);
+  baseRim.position.set(0, -0.42, 1.34);
+  baseRim.castShadow = true;
+  baseRim.receiveShadow = true;
+  machine.add(baseRim);
+
+  const frontCrown = roundedBox(8.96, 0.38, 0.42, 0.18, enamel);
+  frontCrown.position.set(0, 0.5, 3.35);
+  frontCrown.rotation.x = -0.1;
+  frontCrown.castShadow = true;
+  frontCrown.receiveShadow = true;
+  machine.add(frontCrown);
+
+  const rearDeck = roundedBox(8.86, 0.42, 1.18, 0.22, enamel);
+  rearDeck.position.set(0, 1.18, -0.18);
+  rearDeck.rotation.x = -0.08;
+  rearDeck.castShadow = true;
+  rearDeck.receiveShadow = true;
+  machine.add(rearDeck);
+
+  const rearBackPanel = roundedBox(9.1, 0.86, 0.32, 0.14, enamel);
+  rearBackPanel.position.set(0, 1.78, -1.26);
+  rearBackPanel.castShadow = true;
+  rearBackPanel.receiveShadow = true;
+  machine.add(rearBackPanel);
+
+  const rearNamePlate = makePlateLabel("TYPE", 1.65, 0.32);
+  rearNamePlate.position.set(0, 1.9, -1.45);
+  rearNamePlate.rotation.x = -0.04;
+  machine.add(rearNamePlate);
+
+  const basketFloor = roundedBox(5.35, 0.18, 1.36, 0.18, innerShadow);
+  basketFloor.position.set(0, 0.98, 0.38);
+  basketFloor.rotation.x = -0.08;
+  basketFloor.castShadow = true;
+  basketFloor.receiveShadow = true;
+  machine.add(basketFloor);
+
+  const centerMask = roundedBox(3.35, 0.14, 0.56, 0.18, enamel);
+  centerMask.position.set(0, 1.08, 1.2);
+  centerMask.rotation.x = -0.2;
+  centerMask.castShadow = true;
+  centerMask.receiveShadow = true;
+  machine.add(centerMask);
+
+  [-1, 1].forEach((side) => {
+    const sideWall = roundedBox(1.18, 1.02, 5.12, 0.34, enamel);
+    sideWall.position.set(side * 4.82, 0.22, 1.32);
+    sideWall.rotation.z = side * -0.045;
+    sideWall.castShadow = true;
+    sideWall.receiveShadow = true;
+    machine.add(sideWall);
+
+    const upperCheek = roundedBox(1.54, 0.88, 1.72, 0.32, enamel);
+    upperCheek.position.set(side * 3.76, 1.48, -0.04);
+    upperCheek.rotation.z = side * -0.08;
+    upperCheek.castShadow = true;
+    upperCheek.receiveShadow = true;
+    machine.add(upperCheek);
+
+    const spoolPedestal = roundedBox(1.55, 0.44, 1.35, 0.32, enamel);
+    spoolPedestal.position.set(side * 3.38, 1.28, 0.28);
+    spoolPedestal.castShadow = true;
+    spoolPedestal.receiveShadow = true;
+    machine.add(spoolPedestal);
+
+    const sideSkirt = roundedBox(0.72, 0.68, 3.6, 0.24, wornBlack);
+    sideSkirt.position.set(side * 4.28, 0.18, 1.92);
+    sideSkirt.rotation.z = side * -0.055;
+    sideSkirt.castShadow = true;
+    sideSkirt.receiveShadow = true;
+    machine.add(sideSkirt);
+
+    const sideTrim = cylinderBetween(
+      new THREE.Vector3(side * 4.12, 0.54, 3.32),
+      new THREE.Vector3(side * 3.68, 1.58, -0.62),
+      0.022,
+      brass
+    );
+    machine.add(sideTrim);
+
+    const rearFoot = roundedBox(0.86, 0.24, 0.58, 0.18, darkRubber);
+    rearFoot.position.set(side * 3.92, -0.58, -1.05);
+    rearFoot.castShadow = true;
+    rearFoot.receiveShadow = true;
+    machine.add(rearFoot);
+  });
+
+  const frontGoldRail = cylinderBetween(
+    new THREE.Vector3(-4.42, 0.48, 3.44),
+    new THREE.Vector3(4.42, 0.48, 3.44),
+    0.018,
+    brass
+  );
+  machine.add(frontGoldRail);
+
+  const rearGoldRail = cylinderBetween(
+    new THREE.Vector3(-4.2, 2.02, -1.12),
+    new THREE.Vector3(4.2, 2.02, -1.12),
+    0.018,
+    brass
+  );
+  machine.add(rearGoldRail);
 }
 
 function addPlaten(machine, darkRubber, brass) {
@@ -656,6 +894,62 @@ function addCarriageDetails(brass, darkRubber, black) {
   );
   carriage.add(carriageRack);
 
+  const rearPlatenCover = roundedBox(8.58, 0.46, 0.34, 0.12, black);
+  rearPlatenCover.position.set(0, 3.28, -1.34);
+  rearPlatenCover.castShadow = true;
+  rearPlatenCover.receiveShadow = true;
+  carriage.add(rearPlatenCover);
+
+  const rearLogo = makePlateLabel("TYPE", 1.42, 0.28);
+  rearLogo.position.set(-1.84, 3.38, -1.53);
+  rearLogo.rotation.x = -0.04;
+  carriage.add(rearLogo);
+
+  const topGuideRail = cylinderBetween(
+    new THREE.Vector3(-4.2, 3.5, -1.1),
+    new THREE.Vector3(4.2, 3.5, -1.1),
+    0.024,
+    brass
+  );
+  carriage.add(topGuideRail);
+
+  const lowerGuideRail = cylinderBetween(
+    new THREE.Vector3(-4.18, 2.48, -1.1),
+    new THREE.Vector3(4.18, 2.48, -1.1),
+    0.02,
+    brass
+  );
+  carriage.add(lowerGuideRail);
+
+  [-1, 1].forEach((side) => {
+    const x = side * 4.28;
+    const endPlate = roundedBox(0.28, 0.92, 0.64, 0.12, black);
+    endPlate.position.set(x, 2.86, -0.76);
+    endPlate.castShadow = true;
+    endPlate.receiveShadow = true;
+    carriage.add(endPlate);
+
+    const chromeBracket = roundedBox(0.18, 0.74, 0.18, 0.06, brass);
+    chromeBracket.position.set(side * 4.08, 2.88, -0.44);
+    chromeBracket.rotation.z = side * 0.08;
+    chromeBracket.castShadow = true;
+    carriage.add(chromeBracket);
+
+    const platenAxle = cylinderBetween(
+      new THREE.Vector3(side * 3.96, 3.0, -1.03),
+      new THREE.Vector3(side * 4.44, 3.0, -1.03),
+      0.035,
+      brass
+    );
+    carriage.add(platenAxle);
+
+    const returnLeverBracket = roundedBox(0.16, 0.36, 0.46, 0.06, brass);
+    returnLeverBracket.position.set(side * 4.5, 3.34, -1.18);
+    returnLeverBracket.rotation.z = side * 0.16;
+    returnLeverBracket.castShadow = true;
+    carriage.add(returnLeverBracket);
+  });
+
 }
 
 function addRibbon(machine, black, brass, ribbonRed) {
@@ -701,16 +995,19 @@ function addTypebars(machine, brass, black) {
     const t = count === 1 ? 0 : i / (count - 1);
     const spread = (t - 0.5) * 4.85;
     const start = new THREE.Vector3(spread, 0.98, 0.72 + Math.abs(t - 0.5) * 0.22);
-    const rest = new THREE.Vector3(spread * 0.3, 1.36, 0.42);
-    const apex = new THREE.Vector3(spread * 0.12, 2.64, -0.4);
     const target = getPrintHeadTarget();
+    const length = start.distanceTo(target);
+    const restBase = new THREE.Vector3(spread * 0.34, 1.2, 2.85 + Math.abs(t - 0.5) * 0.3);
+    const restDirection = restBase.sub(start).normalize();
+    const rest = start.clone().add(restDirection.multiplyScalar(length));
+    const apex = new THREE.Vector3(spread * 0.12, 2.64, -0.4);
     const rod = cylinderBetween(start, rest, 0.017, brass);
     const slug = roundedBox(0.19, 0.15, 0.08, 0.02, black);
     slug.position.copy(rest);
     slug.lookAt(getPrintSlugLookTarget(target));
     const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), brass);
     hinge.position.copy(start);
-    const arm = { start, rest, apex, target, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
+    const arm = { start, rest, apex, target, length, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
@@ -1455,6 +1752,7 @@ function strikeMachine(value) {
   if (printableStrike) {
     sceneState.carriageHoldUntil = Math.max(sceneState.carriageHoldUntil, now + printHeadMetrics.escapementDelay);
     sceneState.paperImpactStart = now + printHeadMetrics.strikeContactTime;
+    sceneState.ribbonStrikeStart = now;
     window.setTimeout(drawPaper, printHeadMetrics.strikeContactTime + 24);
     window.setTimeout(() => playThud(), printHeadMetrics.strikeContactTime);
   } else {
@@ -1466,6 +1764,12 @@ function strikeMachine(value) {
 
 function keyIndexForValue(value) {
   const stringValue = String(value || "");
+  const normalized = stringValue.toLowerCase();
+  const orderedIndex = printableTypeOrder.indexOf(normalized);
+  if (orderedIndex >= 0 && sceneState.typebars.length > 1) {
+    return Math.round((orderedIndex / Math.max(1, printableTypeOrder.length - 1)) * (sceneState.typebars.length - 1));
+  }
+
   let total = 0;
   for (let i = 0; i < stringValue.length; i += 1) {
     total += stringValue.charCodeAt(i);
@@ -1587,12 +1891,10 @@ function updateCarriage() {
 
 function typebarTipPosition(arm, lift) {
   const t = Math.max(0, Math.min(1, lift));
-  const oneMinusT = 1 - t;
-  return new THREE.Vector3(
-    oneMinusT * oneMinusT * arm.rest.x + 2 * oneMinusT * t * arm.apex.x + t * t * arm.target.x,
-    oneMinusT * oneMinusT * arm.rest.y + 2 * oneMinusT * t * arm.apex.y + t * t * arm.target.y,
-    oneMinusT * oneMinusT * arm.rest.z + 2 * oneMinusT * t * arm.apex.z + t * t * arm.target.z
-  );
+  const restDirection = new THREE.Vector3().subVectors(arm.rest, arm.start).normalize();
+  const targetDirection = new THREE.Vector3().subVectors(arm.target, arm.start).normalize();
+  const direction = restDirection.lerp(targetDirection, easeInOutSine(t)).normalize();
+  return arm.start.clone().add(direction.multiplyScalar(arm.length));
 }
 
 function typebarLift(elapsed, intensity = 1) {
@@ -1616,7 +1918,23 @@ function typebarImpact(elapsed, intensity = 1) {
   if (elapsed < 0 || intensity <= 0) {
     return 0;
   }
-  return Math.max(0, 1 - Math.abs(elapsed - printHeadMetrics.strikeContactTime) / 18) * intensity;
+  return Math.max(0, 1 - Math.abs(elapsed - printHeadMetrics.strikeContactTime) / 12) * intensity;
+}
+
+function ribbonLiftForStrike(elapsed) {
+  if (elapsed < 0 || elapsed > printHeadMetrics.strikeDuration) {
+    return 0;
+  }
+
+  const riseStart = printHeadMetrics.strikeContactTime * 0.35;
+  const fallEnd = printHeadMetrics.strikeContactTime + 92;
+  if (elapsed < riseStart) {
+    return 0;
+  }
+  if (elapsed <= printHeadMetrics.strikeContactTime) {
+    return easeOutCubic((elapsed - riseStart) / (printHeadMetrics.strikeContactTime - riseStart));
+  }
+  return Math.max(0, 1 - easeInCubic((elapsed - printHeadMetrics.strikeContactTime) / (fallEnd - printHeadMetrics.strikeContactTime)));
 }
 
 function updateActiveHammer(state, now) {
@@ -1636,7 +1954,7 @@ function updateActiveHammer(state, now) {
   const impact = typebarImpact(elapsed, arm.intensity);
   const end = typebarTipPosition(arm, lift);
   end.y += impact * 0.035;
-  end.z -= impact * 0.022;
+  end.z += impact * 0.038;
   const sideOffset = strikeBarSideOffset(arm.start, end, 0.055);
   const sideEndOffset = sideOffset.clone().multiplyScalar(0.36);
   const leftStart = arm.start.clone().add(sideOffset);
@@ -1709,7 +2027,7 @@ function animate() {
     end.y += state.shiftLift * 0.055;
     const impact = typebarImpact(elapsed, arm.intensity);
     end.y += impact * 0.028;
-    end.z -= impact * 0.024;
+    end.z += impact * 0.026;
     updateCylinderBetween(arm.rod, arm.start, end);
     arm.slug.position.copy(end);
     arm.slug.scale.set(1 + impact * 0.22, 1 + impact * 0.12, 1 + impact * 0.08);
@@ -1726,7 +2044,11 @@ function animate() {
 
   if (state.ribbonGuide) {
     const printTarget = getPrintHeadTarget();
-    const lift = Math.min(1, state.ribbonPulse * 1.18);
+    const strikeRibbonLift = ribbonLiftForStrike(now - state.ribbonStrikeStart);
+    if (now - state.ribbonStrikeStart > printHeadMetrics.strikeDuration) {
+      state.ribbonStrikeStart = -Infinity;
+    }
+    const lift = Math.max(strikeRibbonLift, Math.min(1, state.ribbonPulse * 0.42));
     state.ribbonGuide.position.y = printHeadMetrics.ribbonRestY + (printTarget.y - 0.02 - printHeadMetrics.ribbonRestY) * lift;
     state.ribbonGuide.position.z = printHeadMetrics.ribbonRestZ + (printTarget.z + 0.04 - printHeadMetrics.ribbonRestZ) * lift;
   }
@@ -1778,6 +2100,10 @@ function buildPdf(text) {
   const maxChars = 74;
   const maxLines = Math.floor((pageHeight - margin * 2) / lineHeight);
   const lines = wrapText(text, maxChars);
+  const tone = paperTones[sceneState.paperTone] || paperTones.ivory;
+  const backgroundColor = toPdfRgb(tone.base);
+  const borderColor = toPdfRgb(tone.edge);
+  const inkColor = toPdfRgb(sceneState.ink);
   const pages = [];
 
   for (let i = 0; i < lines.length || i === 0; i += maxLines) {
@@ -1792,8 +2118,14 @@ function buildPdf(text) {
   pages.forEach((pageLines, index) => {
     const pageObjectNumber = 3 + index * 2;
     const contentObjectNumber = pageObjectNumber + 1;
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Courier >> >> >> /Contents ${contentObjectNumber} 0 R >>`);
-    const stream = makePdfStream(pageLines, margin, pageHeight - margin, fontSize, lineHeight);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >> >> >> /Contents ${contentObjectNumber} 0 R >>`);
+    const stream = makePdfStream(pageLines, margin, pageHeight - margin, fontSize, lineHeight, {
+      backgroundColor,
+      borderColor,
+      inkColor,
+      pageWidth,
+      pageHeight
+    });
     objects.push(`<< /Length ${byteLength(stream)} >>\nstream\n${stream}\nendstream`);
   });
 
@@ -1837,20 +2169,98 @@ function wrapText(text, maxChars) {
   return lines;
 }
 
-function makePdfStream(lines, x, y, fontSize, lineHeight) {
+function makePdfStream(lines, x, y, fontSize, lineHeight, options = {}) {
+  const {
+    backgroundColor = "1 1 1",
+    borderColor = "0.8 0.74 0.64",
+    inkColor = "0.12 0.1 0.08",
+    pageWidth = 612,
+    pageHeight = 792
+  } = options;
+  const background = [
+    `q ${backgroundColor} rg 0 0 ${pageWidth} ${pageHeight} re f Q`,
+    `q ${borderColor} RG 1.4 w 40 40 ${pageWidth - 80} ${pageHeight - 80} re S Q`
+  ];
   const encoded = lines.map((line, index) => {
     const yy = y - index * lineHeight;
-    return `BT /F1 ${fontSize} Tf ${x} ${yy} Td (${escapePdfText(line)}) Tj ET`;
+    return `${inkColor} rg BT /F1 ${fontSize} Tf ${x} ${yy} Td (${escapePdfText(line)}) Tj ET`;
   });
-  return encoded.join("\n");
+  return background.concat(encoded).join("\n");
 }
 
 function escapePdfText(text) {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
+function downloadPdf(pdf) {
+  const link = document.createElement("a");
+  link.download = "type-page.pdf";
+  let objectUrl = "";
+  const canUseObjectUrl = typeof Blob !== "undefined"
+    && typeof URL !== "undefined"
+    && typeof URL.createObjectURL === "function";
+
+  if (canUseObjectUrl) {
+    const blob = new Blob([pdf], { type: "application/pdf" });
+    objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+  } else {
+    link.href = `data:application/pdf;charset=utf-8,${encodeURIComponent(pdf)}`;
+  }
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  if (objectUrl && typeof URL.revokeObjectURL === "function") {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function byteLength(text) {
-  return new Blob([text]).size;
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(text).length;
+  }
+
+  let length = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) {
+      length += 1;
+    } else if (code < 0x800) {
+      length += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      length += 4;
+      i += 1;
+    } else {
+      length += 3;
+    }
+  }
+  return length;
+}
+
+function toPdfRgb(color) {
+  const rgb = colorToRgb(color);
+  return rgb.map((channel) => (channel / 255).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")).join(" ");
+}
+
+function colorToRgb(color) {
+  const value = String(color || "").trim();
+  if (value.startsWith("#")) {
+    const hex = value.slice(1);
+    const normalized = hex.length === 3
+      ? hex.split("").map((character) => character + character).join("")
+      : hex.padEnd(6, "0").slice(0, 6);
+    const number = parseInt(normalized, 16);
+    return [(number >> 16) & 255, (number >> 8) & 255, number & 255];
+  }
+
+  const rgbMatch = value.match(/rgba?\(([^)]+)\)/i);
+  if (rgbMatch) {
+    return rgbMatch[1].split(",").slice(0, 3).map((part) => Math.max(0, Math.min(255, Number.parseFloat(part) || 0)));
+  }
+
+  return [32, 27, 23];
 }
 
 function restoreState() {
@@ -2336,6 +2746,10 @@ function easeOutCubic(value) {
 
 function easeInCubic(value) {
   return value ** 3;
+}
+
+function easeInOutSine(value) {
+  return -(Math.cos(Math.PI * value) - 1) / 2;
 }
 
 function lighten(hex, amount) {
