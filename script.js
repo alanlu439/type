@@ -13,7 +13,12 @@ const focusLabel = document.querySelector("[data-focus-label]");
 const clearPageButton = document.querySelector("[data-clear-page]");
 const ribbonCycleButton = document.querySelector("[data-ribbon-cycle]");
 const zoomOutButton = document.querySelector("[data-zoom-out]");
-const whiteoutButton = document.querySelector("[data-whiteout]");
+const correctionRibbonButton = document.querySelector("[data-correction-ribbon]");
+const marginReleaseButton = document.querySelector("[data-margin-release]");
+const tabStopButton = document.querySelector("[data-tab-stop]");
+const paperUpButton = document.querySelector("[data-paper-up]");
+const paperDownButton = document.querySelector("[data-paper-down]");
+const carriageReturnButton = document.querySelector("[data-carriage-return]");
 const snapshotButton = document.querySelector("[data-snapshot]");
 const rotateLeftButton = document.querySelector("[data-rotate-left]");
 const rotateRightButton = document.querySelector("[data-rotate-right]");
@@ -55,14 +60,15 @@ const ribbonShortcutColors = ["#201b17", "#641b1f"];
 const printHeadMetrics = {
   glyphCenterX: -0.22,
   glyphCenterY: 32,
-  contactY: 3.24,
-  contactZ: -0.49,
+  contactY: 3.535,
+  contactZ: -0.59,
   ribbonRestY: 1.9,
   ribbonRestZ: -0.48,
-  strikeDuration: 184,
-  strikeContactTime: 66,
-  strikeAttackRatio: 0.32,
-  escapementDelay: 104
+  strikeDuration: 310,
+  strikeContactTime: 74,
+  strikeAttackRatio: 0.24,
+  strikeDwellRatio: 0.26,
+  escapementDelay: 118
 };
 
 const keyRows = [
@@ -120,6 +126,8 @@ const sceneState = {
   paperContext: null,
   paperCanvas: null,
   ribbonGuide: null,
+  strikeHammer: null,
+  activeStrikeArm: null,
   keys: new Map(),
   keyObjects: [],
   typebars: [],
@@ -245,7 +253,12 @@ soundButtons.forEach((button) => {
 
 ribbonCycleButton?.addEventListener("click", () => cycleRibbon());
 zoomOutButton?.addEventListener("click", () => zoomOut());
-whiteoutButton?.addEventListener("click", () => applyWhiteout());
+correctionRibbonButton?.addEventListener("click", () => applyWhiteout());
+marginReleaseButton?.addEventListener("click", () => toggleMarginRelease());
+tabStopButton?.addEventListener("click", () => moveToNextTabStop());
+paperUpButton?.addEventListener("click", () => moveRoller(-1));
+paperDownButton?.addEventListener("click", () => moveRoller(1));
+carriageReturnButton?.addEventListener("click", () => returnCarriage());
 snapshotButton?.addEventListener("click", () => saveAsImage());
 rotateLeftButton?.addEventListener("click", () => rotatePaper(-0.05));
 rotateRightButton?.addEventListener("click", () => rotatePaper(0.05));
@@ -411,22 +424,42 @@ function buildTypewriter(scene) {
   addCarriageDetails(brass, darkRubber, black);
   addRibbon(machine, black, brass, ribbonRed);
   addTypebars(machine, brass, black);
+  addActiveHammer(machine, brass, black);
   addKeys(machine, black, brass);
   addLevers(machine, brass, darkRubber);
   addMachineDetails(machine, black, wornBlack, brass, darkRubber);
 }
 
 function addBody(machine, black, wornBlack, brass) {
+  const lowerPan = roundedBox(9.85, 0.44, 5.05, 0.32, black);
+  lowerPan.position.set(0, -0.26, 1.36);
+  lowerPan.castShadow = true;
+  lowerPan.receiveShadow = true;
+  machine.add(lowerPan);
+
   const base = roundedBox(9.4, 0.58, 4.9, 0.28, black);
   base.position.set(0, 0, 1.35);
   base.castShadow = true;
   base.receiveShadow = true;
   machine.add(base);
 
+  const frontApron = roundedBox(9.05, 0.74, 0.58, 0.22, black);
+  frontApron.position.set(0, 0.08, 3.72);
+  frontApron.castShadow = true;
+  frontApron.receiveShadow = true;
+  machine.add(frontApron);
+
   const frontLip = roundedBox(8.5, 0.55, 0.52, 0.22, wornBlack);
   frontLip.position.set(0, 0.34, 3.55);
   frontLip.castShadow = true;
   machine.add(frontLip);
+
+  const keyBed = roundedBox(8.45, 0.22, 3.08, 0.2, wornBlack);
+  keyBed.position.set(0, 0.56, 2.18);
+  keyBed.rotation.x = -0.12;
+  keyBed.castShadow = true;
+  keyBed.receiveShadow = true;
+  machine.add(keyBed);
 
   const deck = roundedBox(8.3, 0.42, 3.2, 0.25, wornBlack);
   deck.position.set(0, 0.42, 1.75);
@@ -435,12 +468,39 @@ function addBody(machine, black, wornBlack, brass) {
   deck.receiveShadow = true;
   machine.add(deck);
 
+  const rearShoulder = roundedBox(8.75, 0.48, 1.2, 0.2, black);
+  rearShoulder.position.set(0, 0.68, 0);
+  rearShoulder.rotation.x = -0.05;
+  rearShoulder.castShadow = true;
+  rearShoulder.receiveShadow = true;
+  machine.add(rearShoulder);
+
+  const typeBasketPlate = roundedBox(4.35, 0.18, 1.14, 0.12, wornBlack);
+  typeBasketPlate.position.set(0, 0.86, 0.74);
+  typeBasketPlate.rotation.x = -0.08;
+  typeBasketPlate.castShadow = true;
+  typeBasketPlate.receiveShadow = true;
+  machine.add(typeBasketPlate);
+
+  const carriageBridge = roundedBox(8.95, 0.22, 0.46, 0.12, black);
+  carriageBridge.position.set(0, 2.08, -0.94);
+  carriageBridge.castShadow = true;
+  carriageBridge.receiveShadow = true;
+  machine.add(carriageBridge);
+
   const backRail = roundedBox(8.7, 0.26, 0.22, 0.08, black);
   backRail.position.set(0, 1.82, -1.05);
   backRail.castShadow = true;
   machine.add(backRail);
 
   [-4.9, 4.9].forEach((x) => {
+    const sideFill = roundedBox(0.92, 0.82, 4.65, 0.24, black);
+    sideFill.position.set(x * 0.94, 0.08, 1.42);
+    sideFill.rotation.z = x > 0 ? -0.05 : 0.05;
+    sideFill.castShadow = true;
+    sideFill.receiveShadow = true;
+    machine.add(sideFill);
+
     const side = roundedBox(0.82, 1.02, 4.15, 0.24, black);
     side.position.set(x, 0.42, 1.4);
     side.rotation.z = x > 0 ? -0.07 : 0.07;
@@ -640,16 +700,17 @@ function addTypebars(machine, brass, black) {
   for (let i = 0; i < count; i += 1) {
     const t = count === 1 ? 0 : i / (count - 1);
     const spread = (t - 0.5) * 4.85;
-    const start = new THREE.Vector3(spread, 1.1, 0.35 + Math.abs(t - 0.5) * 0.18);
-    const rest = new THREE.Vector3(spread * 0.28, 1.77, -0.22);
+    const start = new THREE.Vector3(spread, 0.98, 0.72 + Math.abs(t - 0.5) * 0.22);
+    const rest = new THREE.Vector3(spread * 0.3, 1.36, 0.42);
+    const apex = new THREE.Vector3(spread * 0.12, 2.64, -0.4);
     const target = getPrintHeadTarget();
     const rod = cylinderBetween(start, rest, 0.017, brass);
-    const slug = roundedBox(0.16, 0.12, 0.07, 0.02, black);
+    const slug = roundedBox(0.19, 0.15, 0.08, 0.02, black);
     slug.position.copy(rest);
-    slug.lookAt(target);
+    slug.lookAt(getPrintSlugLookTarget(target));
     const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), brass);
     hinge.position.copy(start);
-    const arm = { start, rest, target, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
+    const arm = { start, rest, apex, target, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
@@ -659,6 +720,34 @@ function addTypebars(machine, brass, black) {
   basket.rotation.x = Math.PI * 0.53;
   basket.rotation.z = Math.PI;
   machine.add(basket);
+}
+
+function addActiveHammer(machine, brass, black) {
+  const activeBrass = new THREE.MeshStandardMaterial({
+    color: 0xf0ba66,
+    roughness: 0.24,
+    metalness: 0.9,
+    emissive: 0x2f1a06,
+    emissiveIntensity: 0.18
+  });
+  const slugMaterial = new THREE.MeshStandardMaterial({
+    color: 0x090807,
+    roughness: 0.42,
+    metalness: 0.82
+  });
+  const group = new THREE.Group();
+  const leftRod = cylinderBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.1, 0), 0.025, activeBrass);
+  const rightRod = cylinderBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.1, 0), 0.025, activeBrass);
+  const centerRod = cylinderBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.1, 0), 0.014, brass);
+  const slug = roundedBox(0.36, 0.24, 0.15, 0.028, slugMaterial);
+  const face = roundedBox(0.24, 0.1, 0.03, 0.01, activeBrass);
+  const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.09, 18, 14), activeBrass);
+  face.position.z = -0.085;
+  slug.add(face);
+  group.add(leftRod, rightRod, centerRod, slug, hinge);
+  group.visible = false;
+  sceneState.strikeHammer = { group, leftRod, rightRod, centerRod, slug, hinge };
+  machine.add(group);
 }
 
 function addKeys(machine, black, brass) {
@@ -1358,6 +1447,7 @@ function strikeMachine(value) {
     if (primary) {
       primary.strikeStart = now;
       primary.intensity = 1;
+      sceneState.activeStrikeArm = primary;
       sceneState.lastStrike = now;
     }
   }
@@ -1403,10 +1493,16 @@ function getPrintHeadTarget() {
   return new THREE.Vector3(0, printHeadMetrics.contactY, printHeadMetrics.contactZ);
 }
 
+function getPrintSlugLookTarget(target = getPrintHeadTarget()) {
+  return new THREE.Vector3(target.x, target.y, target.z - 0.36);
+}
+
 function renderPage() {
   output.textContent = input.value;
   const words = input.value.trim().match(/\S+/g);
-  wordCount.textContent = words ? words.length : 0;
+  if (wordCount) {
+    wordCount.textContent = words ? words.length : 0;
+  }
   drawPaper();
   updateCarriage();
 }
@@ -1489,6 +1585,84 @@ function updateCarriage() {
   sceneState.targetCarriageShift = Math.max(-3.18, Math.min(3.18, targetShift));
 }
 
+function typebarTipPosition(arm, lift) {
+  const t = Math.max(0, Math.min(1, lift));
+  const oneMinusT = 1 - t;
+  return new THREE.Vector3(
+    oneMinusT * oneMinusT * arm.rest.x + 2 * oneMinusT * t * arm.apex.x + t * t * arm.target.x,
+    oneMinusT * oneMinusT * arm.rest.y + 2 * oneMinusT * t * arm.apex.y + t * t * arm.target.y,
+    oneMinusT * oneMinusT * arm.rest.z + 2 * oneMinusT * t * arm.apex.z + t * t * arm.target.z
+  );
+}
+
+function typebarLift(elapsed, intensity = 1) {
+  if (elapsed < 0 || elapsed >= printHeadMetrics.strikeDuration || intensity <= 0) {
+    return 0;
+  }
+
+  const t = elapsed / printHeadMetrics.strikeDuration;
+  const attack = printHeadMetrics.strikeAttackRatio;
+  const dwell = printHeadMetrics.strikeDwellRatio;
+  if (t < attack) {
+    return easeOutCubic(t / attack) * intensity;
+  }
+  if (t < attack + dwell) {
+    return intensity;
+  }
+  return (1 - easeOutCubic((t - attack - dwell) / (1 - attack - dwell))) * intensity;
+}
+
+function typebarImpact(elapsed, intensity = 1) {
+  if (elapsed < 0 || intensity <= 0) {
+    return 0;
+  }
+  return Math.max(0, 1 - Math.abs(elapsed - printHeadMetrics.strikeContactTime) / 18) * intensity;
+}
+
+function updateActiveHammer(state, now) {
+  const hammer = state.strikeHammer;
+  const arm = state.activeStrikeArm;
+  if (!hammer || !arm) {
+    return;
+  }
+
+  const elapsed = now - arm.strikeStart;
+  const lift = typebarLift(elapsed, arm.intensity);
+  if (lift <= 0) {
+    hammer.group.visible = false;
+    return;
+  }
+
+  const impact = typebarImpact(elapsed, arm.intensity);
+  const end = typebarTipPosition(arm, lift);
+  end.y += impact * 0.035;
+  end.z -= impact * 0.022;
+  const sideOffset = strikeBarSideOffset(arm.start, end, 0.055);
+  const sideEndOffset = sideOffset.clone().multiplyScalar(0.36);
+  const leftStart = arm.start.clone().add(sideOffset);
+  const rightStart = arm.start.clone().sub(sideOffset);
+  const leftEnd = end.clone().add(sideEndOffset);
+  const rightEnd = end.clone().sub(sideEndOffset);
+  hammer.group.visible = true;
+  hammer.hinge.position.copy(arm.start);
+  updateCylinderBetween(hammer.leftRod, leftStart, leftEnd);
+  updateCylinderBetween(hammer.rightRod, rightStart, rightEnd);
+  updateCylinderBetween(hammer.centerRod, arm.start, end);
+  hammer.slug.position.copy(end);
+  hammer.slug.scale.set(1 + impact * 0.2, 1 + impact * 0.12, 1 + impact * 0.08);
+  hammer.slug.lookAt(getPrintSlugLookTarget(arm.target));
+}
+
+function strikeBarSideOffset(start, end, width) {
+  const direction = new THREE.Vector3().subVectors(end, start).normalize();
+  const facing = new THREE.Vector3(0, 0, 1);
+  const side = new THREE.Vector3().crossVectors(direction, facing);
+  if (side.lengthSq() < 0.001) {
+    side.set(1, 0, 0);
+  }
+  return side.normalize().multiplyScalar(width);
+}
+
 function animate() {
   requestAnimationFrame(animate);
   const state = sceneState;
@@ -1526,27 +1700,22 @@ function animate() {
 
   state.typebars.forEach((arm) => {
     const elapsed = now - arm.strikeStart;
-    let lift = 0;
-    if (elapsed >= 0 && elapsed < printHeadMetrics.strikeDuration) {
-      const t = elapsed / printHeadMetrics.strikeDuration;
-      const attack = printHeadMetrics.strikeAttackRatio;
-      lift = t < attack
-        ? easeOutCubic(t / attack)
-        : 1 - easeOutCubic((t - attack) / (1 - attack));
-      lift *= arm.intensity;
-    } else if (elapsed >= printHeadMetrics.strikeDuration) {
+    const lift = typebarLift(elapsed, arm.intensity);
+    if (elapsed >= printHeadMetrics.strikeDuration) {
       arm.intensity = 0;
       arm.strikeStart = -Infinity;
     }
-    const end = arm.rest.clone().lerp(arm.target, lift);
+    const end = typebarTipPosition(arm, lift);
     end.y += state.shiftLift * 0.055;
-    const impact = Math.max(0, 1 - Math.abs(elapsed - printHeadMetrics.strikeContactTime) / 18) * arm.intensity;
+    const impact = typebarImpact(elapsed, arm.intensity);
     end.y += impact * 0.028;
     end.z -= impact * 0.024;
     updateCylinderBetween(arm.rod, arm.start, end);
     arm.slug.position.copy(end);
-    arm.slug.lookAt(arm.target);
+    arm.slug.scale.set(1 + impact * 0.22, 1 + impact * 0.12, 1 + impact * 0.08);
+    arm.slug.lookAt(getPrintSlugLookTarget(arm.target));
   });
+  updateActiveHammer(state, now);
 
   if (state.paperMesh) {
     state.paperAngle += (state.targetPaperAngle - state.paperAngle) * 0.16;
@@ -1724,7 +1893,7 @@ function restoreState() {
   sceneState.focusMode = false;
   sceneState.targetPaperAngle = Number.isFinite(saved.paperAngle) ? Math.max(-0.42, Math.min(0.42, saved.paperAngle)) : 0;
   sceneState.paperAngle = sceneState.targetPaperAngle;
-  setSidebarExpanded(saved.sidebarExpanded !== false, { focus: false, persist: false });
+  setSidebarExpanded(true, { focus: false, persist: false });
   setTextareaCaretFromCarriage();
   resizeScene();
   return true;
@@ -1813,6 +1982,15 @@ function cycleRibbon() {
     next.click();
     setTemporaryStatus("Ribbon changed");
   }
+}
+
+function toggleMarginRelease() {
+  typewriterState.marginRelease = !typewriterState.marginRelease;
+  input.focus({ preventScroll: true });
+  setTemporaryStatus(typewriterState.marginRelease ? "Margin release" : "Margin locked", 900);
+  strikeMachine("Alt");
+  playKey(0.06);
+  queueSaveState();
 }
 
 function applyWhiteout() {
@@ -1936,11 +2114,8 @@ function handleCommandShortcut(event, options = {}) {
     return true;
   }
   if (event.key === "Tab") {
-    if (options.fromInput) {
-      return false;
-    }
     event.preventDefault();
-    setSidebarExpanded(document.body.classList.contains("controls-hidden"));
+    moveToNextTabStop();
     return true;
   }
   if (event.key === "F3") {
@@ -1996,10 +2171,15 @@ function setStatus(status) {
     window.clearTimeout(statusTimer);
     statusTimer = undefined;
   }
-  readyLabel.textContent = status;
+  if (readyLabel) {
+    readyLabel.textContent = status;
+  }
 }
 
 function setTemporaryStatus(status, delay = 900) {
+  if (!readyLabel) {
+    return;
+  }
   if (statusTimer) {
     window.clearTimeout(statusTimer);
   }

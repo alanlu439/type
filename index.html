@@ -19,8 +19,9 @@
         <div class="toolbar-cluster">
           <button class="control-button sound-toggle" type="button" data-sound-toggle aria-pressed="true">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 9.5h4l5-4v13l-5-4H4z"></path>
-              <path d="M17 9c1.3 1.6 1.3 4.4 0 6"></path>
+              <path d="M4.5 9.3h3.4l4.6-3.6v12.6l-4.6-3.6H4.5z"></path>
+              <path d="M16 8.3a5.1 5.1 0 0 1 0 7.4"></path>
+              <path d="M18.7 5.8a8.6 8.6 0 0 1 0 12.4"></path>
             </svg>
             <span data-sound-label>Sound on</span>
             <span class="live-dot" aria-hidden="true"></span>
@@ -28,19 +29,21 @@
 
           <button class="control-button" type="button" data-reset>
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 7v5h-5"></path>
-              <path d="M18.6 12a6.8 6.8 0 1 1-1.9-4.7L20 10.6"></path>
+              <path d="M5 8.7A7.1 7.1 0 1 1 6.2 17"></path>
+              <path d="M5 4.8v3.9h3.9"></path>
             </svg>
             Reset
           </button>
 
           <button class="control-button focus-toggle" type="button" data-focus-mode aria-pressed="false">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 4H5a1 1 0 0 0-1 1v3"></path>
-              <path d="M16 4h3a1 1 0 0 1 1 1v3"></path>
-              <path d="M20 16v3a1 1 0 0 1-1 1h-3"></path>
-              <path d="M8 20H5a1 1 0 0 1-1-1v-3"></path>
-              <path d="M9.5 12h5"></path>
+              <path d="M8.2 4.5H5.7a1.2 1.2 0 0 0-1.2 1.2v2.5"></path>
+              <path d="M15.8 4.5h2.5a1.2 1.2 0 0 1 1.2 1.2v2.5"></path>
+              <path d="M19.5 15.8v2.5a1.2 1.2 0 0 1-1.2 1.2h-2.5"></path>
+              <path d="M8.2 19.5H5.7a1.2 1.2 0 0 1-1.2-1.2v-2.5"></path>
+              <circle cx="12" cy="12" r="2.45"></circle>
+              <path d="M12 8.5v-1.2"></path>
+              <path d="M12 16.7v-1.2"></path>
             </svg>
             <span data-focus-label>Focus</span>
           </button>
@@ -60,34 +63,30 @@
           <button class="swatch paper-swatch" type="button" data-paper="mist" style="--swatch: #d8d4c9" aria-label="Mist paper" aria-pressed="false"></button>
         </div>
 
-        <div class="toolbar-cluster status-panel" aria-live="polite">
-          <span class="ready-state" data-ready-label>Ready</span>
-          <span class="word-count"><span>Words</span><strong data-word-count>0</strong></span>
-        </div>
-
         <button class="control-button export-button" type="button" data-export-pdf>
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3v11"></path>
-            <path d="m8 10 4 4 4-4"></path>
-            <path d="M5 17v3h14v-3"></path>
+            <path d="M7 3.8h7l3 3v13.4H7z"></path>
+            <path d="M14 3.8v4h4"></path>
+            <path d="M12 10.5v5"></path>
+            <path d="m9.8 13.4 2.2 2.2 2.2-2.2"></path>
           </svg>
           Export PDF
         </button>
       </header>
 
       <aside class="command-rail" data-command-rail aria-label="Typewriter shortcuts">
-        <div class="rail-actions" aria-label="Reference-inspired commands">
+        <div class="rail-actions" aria-label="Typewriter controls">
           <button class="rail-command" type="button" data-ribbon-cycle>
             <span>Change ribbon</span><kbd>F1</kbd>
           </button>
-          <button class="rail-command" type="button" data-zoom-out>
-            <span>Zoom out</span><kbd>Esc</kbd>
+          <button class="rail-command" type="button" data-margin-release>
+            <span>Margin release</span><kbd>Alt</kbd>
           </button>
-          <button class="rail-command" type="button" data-whiteout>
-            <span>Apply white-out</span><kbd>Del</kbd>
+          <button class="rail-command" type="button" data-correction-ribbon>
+            <span>Correction ribbon</span><kbd>Del</kbd>
           </button>
-          <button class="rail-command" type="button" data-sidebar-toggle aria-expanded="true">
-            <span data-sidebar-label>Hide shortcuts</span><kbd>Tab</kbd>
+          <button class="rail-command" type="button" data-tab-stop>
+            <span>Tab stop</span><kbd>Tab</kbd>
           </button>
           <button class="rail-command" type="button" data-left-margin>
             <span>Set left margin</span><kbd>F3</kbd>
@@ -95,24 +94,20 @@
           <button class="rail-command" type="button" data-right-margin>
             <span>Set right margin</span><kbd>F4</kbd>
           </button>
-          <button class="rail-command" type="button" data-snapshot>
-            <span>Save as image</span>
+          <button class="rail-command" type="button" data-paper-up>
+            <span>Paper up</span><kbd>PgUp</kbd>
           </button>
-          <button class="rail-command" type="button" data-rotate-left>
-            <span>Rotate left</span><kbd>F5</kbd>
+          <button class="rail-command" type="button" data-paper-down>
+            <span>Paper down</span><kbd>PgDn</kbd>
           </button>
-          <button class="rail-command" type="button" data-rotate-right>
-            <span>Rotate right</span><kbd>F6</kbd>
+          <button class="rail-command" type="button" data-carriage-return>
+            <span>Carriage return</span><kbd>Enter</kbd>
           </button>
           <button class="rail-command" type="button" data-clear-page>
-            <span>Clear page</span><kbd>F10</kbd>
+            <span>New sheet</span><kbd>F10</kbd>
           </button>
         </div>
       </aside>
-
-      <button class="rail-peek" type="button" data-sidebar-toggle aria-expanded="true">
-        <span data-sidebar-label>Hide shortcuts</span>
-      </button>
 
       <section class="scene-stage" aria-label="3D typewriter simulator" data-stage>
         <canvas class="typewriter-canvas" data-scene aria-hidden="true"></canvas>
