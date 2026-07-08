@@ -30,12 +30,7 @@ const soundLabels = Array.from(document.querySelectorAll("[data-sound-label]"));
 const inkButtons = Array.from(document.querySelectorAll("[data-ink]"));
 const paperButtons = Array.from(document.querySelectorAll("[data-paper]"));
 
-const seedText = [
-  "The worst enemy to creativity is self-doubt.",
-  "",
-  "Trust the process. Allow yourself to make",
-  "mistakes. And keep typing."
-].join("\n");
+const seedText = "";
 
 const paperTones = {
   ivory: { base: "#efe2ca", edge: "#cdbb9c", grid: "rgba(91, 67, 42, 0.08)" },
@@ -54,7 +49,8 @@ const paperMetrics = {
   charPitch: 28
 };
 
-const storageKey = "type-state-v2";
+const stateVersion = 3;
+const storageKey = `type-state-v${stateVersion}`;
 const ribbonShortcutColors = ["#201b17", "#641b1f"];
 
 const printHeadMetrics = {
@@ -1863,10 +1859,10 @@ function drawPaper() {
         x += paperMetrics.charPitch;
         return;
       }
-      context.globalAlpha = 0.78 + Math.abs(jitter(charIndex + lineIndex * 31, 0.18));
+      context.globalAlpha = 0.84 + Math.abs(jitter(charIndex + lineIndex * 31, 0.1));
       context.save();
-      context.translate(x + jitter(charIndex, 2.1), y + jitter(charIndex + 17, 2.9));
-      context.rotate((jitter(charIndex + 29, 0.45) * Math.PI) / 180);
+      context.translate(x + jitter(charIndex, 0.85), y + jitter(charIndex + 17, 1.1));
+      context.rotate((jitter(charIndex + 29, 0.22) * Math.PI) / 180);
       context.fillText(char, 0, 0);
       context.restore();
       x += paperMetrics.charPitch;
@@ -2265,13 +2261,15 @@ function colorToRgb(color) {
 
 function restoreState() {
   const saved = readSavedState();
-  if (!saved) {
+  if (!saved || saved.version !== stateVersion) {
     return false;
   }
 
   input.value = typeof saved.text === "string" ? saved.text : "";
-  typewriterState.row = Number.isFinite(saved.row) ? Math.max(0, saved.row) : 0;
-  typewriterState.col = Number.isFinite(saved.col) ? Math.max(0, saved.col) : 0;
+  const savedLines = input.value.split("\n");
+  typewriterState.row = Number.isFinite(saved.row) ? Math.max(0, Math.min(savedLines.length - 1, saved.row)) : 0;
+  const activeLine = savedLines[typewriterState.row] || "";
+  typewriterState.col = Number.isFinite(saved.col) ? Math.max(0, Math.min(activeLine.length, saved.col)) : 0;
   typewriterState.leftMargin = Number.isFinite(saved.leftMargin) ? Math.max(0, saved.leftMargin) : defaultMargins.left;
   typewriterState.rightMargin = Number.isFinite(saved.rightMargin) ? Math.max(typewriterState.leftMargin + 2, saved.rightMargin) : defaultMargins.right;
   typewriterState.rollOffset = Number.isFinite(saved.rollOffset) ? Math.max(-paperMetrics.lineHeight * 6, Math.min(paperMetrics.lineHeight * 6, saved.rollOffset)) : 0;
@@ -2331,6 +2329,7 @@ function queueSaveState() {
 function saveStateNow() {
   try {
     window.localStorage.setItem(storageKey, JSON.stringify({
+      version: stateVersion,
       text: input.value,
       row: typewriterState.row,
       col: typewriterState.col,
