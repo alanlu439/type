@@ -423,8 +423,10 @@ function buildTypewriter(scene) {
   addTypebars(machine, brass, black);
   addActiveHammer(machine, brass, black);
   addKeys(machine, black, brass);
+  addKeyLinkages(machine, brass, black);
   addLevers(machine, brass, darkRubber);
   addMachineDetails(machine, black, wornBlack, brass, darkRubber);
+  addAssemblyConnectors(machine, black, wornBlack, brass, darkRubber);
 }
 
 function addBody(machine, black, wornBlack, brass) {
@@ -764,6 +766,14 @@ function addPlaten(machine, darkRubber, brass) {
   sceneState.carriage = carriage;
   machine.add(carriage);
 
+  const axle = cylinderBetween(
+    new THREE.Vector3(-4.92, 3.0, -1.03),
+    new THREE.Vector3(4.92, 3.0, -1.03),
+    0.035,
+    brass
+  );
+  carriage.add(axle);
+
   const platen = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 8.7, 48), darkRubber);
   platen.rotation.z = Math.PI / 2;
   platen.position.set(0, 3.0, -1.03);
@@ -782,6 +792,12 @@ function addPlaten(machine, darkRubber, brass) {
     ring.position.set(x + (x > 0 ? 0.18 : -0.18), 3.0, -1.03);
     ring.rotation.y = Math.PI / 2;
     carriage.add(ring);
+
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.2, 32), brass);
+    hub.rotation.z = Math.PI / 2;
+    hub.position.set(x - Math.sign(x) * 0.22, 3.0, -1.03);
+    hub.castShadow = true;
+    carriage.add(hub);
   });
 }
 
@@ -919,14 +935,20 @@ function addCarriageDetails(brass, darkRubber, black) {
 
   [-1, 1].forEach((side) => {
     const x = side * 4.28;
-    const endPlate = roundedBox(0.28, 0.92, 0.64, 0.12, black);
-    endPlate.position.set(x, 2.86, -0.76);
+    const endPlate = roundedBox(0.34, 1.06, 0.78, 0.12, black);
+    endPlate.position.set(x, 2.9, -0.77);
     endPlate.castShadow = true;
     endPlate.receiveShadow = true;
     carriage.add(endPlate);
 
-    const chromeBracket = roundedBox(0.18, 0.74, 0.18, 0.06, brass);
-    chromeBracket.position.set(side * 4.08, 2.88, -0.44);
+    const sideFrame = roundedBox(0.16, 1.2, 0.18, 0.055, black);
+    sideFrame.position.set(side * 4.03, 2.84, -0.38);
+    sideFrame.castShadow = true;
+    sideFrame.receiveShadow = true;
+    carriage.add(sideFrame);
+
+    const chromeBracket = roundedBox(0.12, 0.82, 0.14, 0.045, brass);
+    chromeBracket.position.set(side * 4.02, 2.88, -0.42);
     chromeBracket.rotation.z = side * 0.08;
     chromeBracket.castShadow = true;
     carriage.add(chromeBracket);
@@ -940,16 +962,38 @@ function addCarriageDetails(brass, darkRubber, black) {
     carriage.add(platenAxle);
 
     const returnLeverBracket = roundedBox(0.16, 0.36, 0.46, 0.06, brass);
-    returnLeverBracket.position.set(side * 4.5, 3.34, -1.18);
+    returnLeverBracket.position.set(side * 4.32, 3.28, -1.08);
     returnLeverBracket.rotation.z = side * 0.16;
     returnLeverBracket.castShadow = true;
     carriage.add(returnLeverBracket);
+
+    const lowerSideRail = cylinderBetween(
+      new THREE.Vector3(side * 4.02, 2.36, -0.48),
+      new THREE.Vector3(side * 4.02, 2.36, -1.12),
+      0.018,
+      brass
+    );
+    carriage.add(lowerSideRail);
   });
 
 }
 
 function addRibbon(machine, black, brass, ribbonRed) {
   [-3.15, 3.15].forEach((x) => {
+    const pedestal = roundedBox(0.94, 0.16, 0.72, 0.14, black);
+    pedestal.position.set(x, 1.28, 0.17);
+    pedestal.castShadow = true;
+    pedestal.receiveShadow = true;
+    machine.add(pedestal);
+
+    const stem = cylinderBetween(
+      new THREE.Vector3(x, 1.28, 0.17),
+      new THREE.Vector3(x, 1.65, 0.17),
+      0.055,
+      brass
+    );
+    machine.add(stem);
+
     const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.22, 48), black);
     spool.position.set(x, 1.52, 0.15);
     spool.rotation.x = Math.PI / 2;
@@ -1169,19 +1213,68 @@ function addKeyStem(key, x, width, keyMaterial, brass) {
   key.add(socket);
 }
 
+function addKeyLinkages(machine, brass, black) {
+  const linkageMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb98742,
+    roughness: 0.34,
+    metalness: 0.86
+  });
+  const pivotMaterial = new THREE.MeshStandardMaterial({
+    color: 0x080706,
+    roughness: 0.5,
+    metalness: 0.72
+  });
+
+  const printableKeys = sceneState.keyObjects.filter((key) => {
+    const value = key.userData.value;
+    return typeof value === "string" && value.length === 1 && value !== " ";
+  });
+
+  printableKeys.forEach((key, index) => {
+    const start = new THREE.Vector3(key.position.x, key.position.y - 0.42, key.position.z - 0.08);
+    const target = new THREE.Vector3(key.position.x * 0.34, 0.78, 0.98 + Math.abs(key.position.x) * 0.03);
+    const rod = cylinderBetween(start, target, index % 3 === 0 ? 0.01 : 0.008, linkageMaterial);
+    rod.castShadow = true;
+    machine.add(rod);
+
+    if (index % 5 === 0) {
+      const pivot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), brass);
+      pivot.position.copy(target);
+      pivot.castShadow = true;
+      machine.add(pivot);
+    }
+  });
+
+  const linkageComb = roundedBox(5.35, 0.1, 0.22, 0.06, pivotMaterial);
+  linkageComb.position.set(0, 0.78, 1.02);
+  linkageComb.rotation.x = -0.1;
+  linkageComb.castShadow = true;
+  linkageComb.receiveShadow = true;
+  machine.add(linkageComb);
+
+  const rearPivotRail = cylinderBetween(
+    new THREE.Vector3(-2.65, 0.88, 0.9),
+    new THREE.Vector3(2.65, 0.88, 0.9),
+    0.026,
+    brass
+  );
+  machine.add(rearPivotRail);
+}
+
 function addLevers(machine, brass, darkRubber) {
+  const parent = sceneState.carriage || machine;
   const lever = cylinderBetween(
-    new THREE.Vector3(-4.4, 2.8, -1.15),
-    new THREE.Vector3(-5.6, 1.4, 0.55),
+    new THREE.Vector3(-4.68, 3.08, -1.02),
+    new THREE.Vector3(-5.08, 2.18, -0.24),
     0.035,
     brass
   );
-  machine.add(lever);
+  parent.add(lever);
 
   const handle = new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 16), darkRubber);
-  handle.position.set(-5.72, 1.26, 0.7);
+  handle.position.set(-5.14, 2.08, -0.14);
   handle.castShadow = true;
-  machine.add(handle);
+  parent.add(handle);
 }
 
 function addMachineDetails(machine, black, wornBlack, brass, darkRubber) {
@@ -1234,6 +1327,77 @@ function addMachineDetails(machine, black, wornBlack, brass, darkRubber) {
       brass
     );
     machine.add(ribbonFork);
+  });
+}
+
+function addAssemblyConnectors(machine, black, wornBlack, brass, darkRubber) {
+  [-1, 1].forEach((side) => {
+    const rearPost = roundedBox(0.28, 1.38, 0.34, 0.1, black);
+    rearPost.position.set(side * 4.15, 1.42, -0.98);
+    rearPost.rotation.z = side * -0.035;
+    rearPost.castShadow = true;
+    rearPost.receiveShadow = true;
+    machine.add(rearPost);
+
+    const cheekBridge = cylinderBetween(
+      new THREE.Vector3(side * 3.58, 1.82, -0.5),
+      new THREE.Vector3(side * 4.16, 2.18, -0.98),
+      0.035,
+      brass
+    );
+    machine.add(cheekBridge);
+
+    const bodyTie = cylinderBetween(
+      new THREE.Vector3(side * 4.28, 0.62, 2.98),
+      new THREE.Vector3(side * 4.04, 1.52, -0.82),
+      0.018,
+      brass
+    );
+    machine.add(bodyTie);
+
+    const rearSaddle = roundedBox(0.7, 0.24, 0.7, 0.14, wornBlack);
+    rearSaddle.position.set(side * 3.72, 1.72, -0.66);
+    rearSaddle.rotation.z = side * -0.04;
+    rearSaddle.castShadow = true;
+    rearSaddle.receiveShadow = true;
+    machine.add(rearSaddle);
+
+    const footTie = cylinderBetween(
+      new THREE.Vector3(side * 4.2, -0.38, 3.18),
+      new THREE.Vector3(side * 4.2, -0.38, -1.12),
+      0.026,
+      darkRubber
+    );
+    machine.add(footTie);
+  });
+
+  const frontCrossmember = roundedBox(8.6, 0.18, 0.28, 0.12, black);
+  frontCrossmember.position.set(0, 0.2, 3.26);
+  frontCrossmember.castShadow = true;
+  frontCrossmember.receiveShadow = true;
+  machine.add(frontCrossmember);
+
+  const basketConnector = roundedBox(5.25, 0.12, 0.34, 0.12, wornBlack);
+  basketConnector.position.set(0, 1.0, 1.28);
+  basketConnector.rotation.x = -0.14;
+  basketConnector.castShadow = true;
+  basketConnector.receiveShadow = true;
+  machine.add(basketConnector);
+
+  [-0.5, 0.5].forEach((x) => {
+    const vibratorTrack = cylinderBetween(
+      new THREE.Vector3(x, 1.58, -0.48),
+      new THREE.Vector3(x, 2.34, -0.46),
+      0.013,
+      brass
+    );
+    machine.add(vibratorTrack);
+
+    const lowerGuideBlock = roundedBox(0.18, 0.14, 0.12, 0.04, black);
+    lowerGuideBlock.position.set(x, 1.56, -0.48);
+    lowerGuideBlock.castShadow = true;
+    lowerGuideBlock.receiveShadow = true;
+    machine.add(lowerGuideBlock);
   });
 }
 
@@ -2073,12 +2237,12 @@ function resizeScene() {
     sceneState.cameraTargetLookAt.set(0, isMobile ? 1.64 : isCompact ? 1.72 : 1.78, isMobile ? 0.48 : 0.28);
     sceneState.cameraTargetFov = isMobile ? 27 : isCompact ? 25 : 24;
   } else {
-    sceneState.cameraTargetPosition.set(0, isMobile ? 5.2 : isCompact ? 5.75 : 6.0, (isMobile ? 16.2 : isCompact ? 15.4 : 15.0) * zoom);
+    sceneState.cameraTargetPosition.set(0, isMobile ? 5.2 : isCompact ? 5.75 : 6.0, (isMobile ? 17.8 : isCompact ? 16.25 : 15.25) * zoom);
     sceneState.cameraTargetLookAt.set(0, isMobile ? 1.25 : 1.2, isMobile ? 1.15 : 0.65);
     sceneState.cameraTargetFov = isMobile ? 40 : isCompact ? 36 : 33;
   }
   if (sceneState.machine) {
-    const scale = isMobile ? Math.max(0.38, Math.min(0.46, width / 860)) : isCompact ? 0.66 : 0.76;
+    const scale = isMobile ? Math.max(0.32, Math.min(0.4, width / 1030)) : isCompact ? 0.62 : 0.74;
     sceneState.machine.scale.setScalar(scale);
     sceneState.baseMachineX = 0;
     sceneState.baseMachineY = isMobile ? -0.06 : isCompact ? -0.14 : -0.18;
