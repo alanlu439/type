@@ -662,6 +662,33 @@ function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
   baseRim.receiveShadow = true;
   machine.add(baseRim);
 
+  const lowerCaseShell = roundedBox(10.36, 0.78, 5.42, 0.54, enamel);
+  lowerCaseShell.position.set(0, -0.2, 1.36);
+  lowerCaseShell.castShadow = true;
+  lowerCaseShell.receiveShadow = true;
+  machine.add(lowerCaseShell);
+
+  const continuousDeck = roundedBox(9.78, 0.32, 4.9, 0.56, enamel);
+  continuousDeck.position.set(0, 0.27, 1.48);
+  continuousDeck.rotation.x = -0.035;
+  continuousDeck.castShadow = true;
+  continuousDeck.receiveShadow = true;
+  machine.add(continuousDeck);
+
+  const frontWrappedApron = roundedBox(9.74, 0.82, 0.86, 0.34, enamel);
+  frontWrappedApron.position.set(0, 0.1, 3.64);
+  frontWrappedApron.rotation.x = -0.04;
+  frontWrappedApron.castShadow = true;
+  frontWrappedApron.receiveShadow = true;
+  machine.add(frontWrappedApron);
+
+  const frontRoll = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 9.46, 32), enamel);
+  frontRoll.position.set(0, 0.52, 3.7);
+  frontRoll.rotation.z = Math.PI / 2;
+  frontRoll.castShadow = true;
+  frontRoll.receiveShadow = true;
+  machine.add(frontRoll);
+
   const frontCrown = roundedBox(8.96, 0.38, 0.42, 0.18, enamel);
   frontCrown.position.set(0, 0.5, 3.35);
   frontCrown.rotation.x = -0.1;
@@ -669,12 +696,26 @@ function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
   frontCrown.receiveShadow = true;
   machine.add(frontCrown);
 
+  const frontKeyboardLip = roundedBox(8.1, 0.24, 0.54, 0.22, enamel);
+  frontKeyboardLip.position.set(0, 0.72, 2.92);
+  frontKeyboardLip.rotation.x = -0.16;
+  frontKeyboardLip.castShadow = true;
+  frontKeyboardLip.receiveShadow = true;
+  machine.add(frontKeyboardLip);
+
   const rearDeck = roundedBox(8.86, 0.42, 1.18, 0.22, enamel);
   rearDeck.position.set(0, 1.18, -0.18);
   rearDeck.rotation.x = -0.08;
   rearDeck.castShadow = true;
   rearDeck.receiveShadow = true;
   machine.add(rearDeck);
+
+  const rearWrap = roundedBox(9.44, 0.68, 1.28, 0.34, enamel);
+  rearWrap.position.set(0, 1.12, -0.52);
+  rearWrap.rotation.x = -0.04;
+  rearWrap.castShadow = true;
+  rearWrap.receiveShadow = true;
+  machine.add(rearWrap);
 
   const rearBackPanel = roundedBox(9.1, 0.86, 0.32, 0.14, enamel);
   rearBackPanel.position.set(0, 1.78, -1.26);
@@ -701,6 +742,36 @@ function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
   centerMask.receiveShadow = true;
   machine.add(centerMask);
 
+  const leftKeyDeck = roundedBox(2.0, 0.32, 3.62, 0.34, enamel);
+  leftKeyDeck.position.set(-3.55, 0.72, 1.98);
+  leftKeyDeck.rotation.x = -0.12;
+  leftKeyDeck.rotation.z = 0.04;
+  leftKeyDeck.castShadow = true;
+  leftKeyDeck.receiveShadow = true;
+  machine.add(leftKeyDeck);
+
+  const rightKeyDeck = roundedBox(2.0, 0.32, 3.62, 0.34, enamel);
+  rightKeyDeck.position.set(3.55, 0.72, 1.98);
+  rightKeyDeck.rotation.x = -0.12;
+  rightKeyDeck.rotation.z = -0.04;
+  rightKeyDeck.castShadow = true;
+  rightKeyDeck.receiveShadow = true;
+  machine.add(rightKeyDeck);
+
+  const rearBasketCover = roundedBox(5.8, 0.26, 0.74, 0.24, enamel);
+  rearBasketCover.position.set(0, 1.06, -0.02);
+  rearBasketCover.rotation.x = -0.08;
+  rearBasketCover.castShadow = true;
+  rearBasketCover.receiveShadow = true;
+  machine.add(rearBasketCover);
+
+  const segmentApron = roundedBox(6.28, 0.22, 0.82, 0.26, enamel);
+  segmentApron.position.set(0, 0.74, 0.43);
+  segmentApron.rotation.x = -0.08;
+  segmentApron.castShadow = true;
+  segmentApron.receiveShadow = true;
+  machine.add(segmentApron);
+
   [-1, 1].forEach((side) => {
     const sideWall = roundedBox(1.18, 1.02, 5.12, 0.34, enamel);
     sideWall.position.set(side * 4.82, 0.22, 1.32);
@@ -716,11 +787,41 @@ function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
     upperCheek.receiveShadow = true;
     machine.add(upperCheek);
 
+    const sideWingCover = roundedBox(1.7, 0.4, 4.46, 0.38, enamel);
+    sideWingCover.position.set(side * 4.04, 0.43, 1.72);
+    sideWingCover.rotation.x = -0.06;
+    sideWingCover.rotation.z = side * -0.045;
+    sideWingCover.castShadow = true;
+    sideWingCover.receiveShadow = true;
+    machine.add(sideWingCover);
+
+    const roundedCornerCap = roundedBox(1.45, 0.76, 1.06, 0.34, enamel);
+    roundedCornerCap.position.set(side * 4.14, 0.72, 3.14);
+    roundedCornerCap.rotation.x = -0.08;
+    roundedCornerCap.rotation.z = side * -0.05;
+    roundedCornerCap.castShadow = true;
+    roundedCornerCap.receiveShadow = true;
+    machine.add(roundedCornerCap);
+
     const spoolPedestal = roundedBox(1.55, 0.44, 1.35, 0.32, enamel);
     spoolPedestal.position.set(side * 3.38, 1.28, 0.28);
     spoolPedestal.castShadow = true;
     spoolPedestal.receiveShadow = true;
     machine.add(spoolPedestal);
+
+    const rearSideCover = roundedBox(1.56, 0.64, 1.46, 0.34, enamel);
+    rearSideCover.position.set(side * 4.1, 1.08, -0.64);
+    rearSideCover.rotation.z = side * -0.06;
+    rearSideCover.castShadow = true;
+    rearSideCover.receiveShadow = true;
+    machine.add(rearSideCover);
+
+    const rearTowerBlend = roundedBox(1.92, 0.48, 1.58, 0.36, enamel);
+    rearTowerBlend.position.set(side * 3.72, 0.96, -0.02);
+    rearTowerBlend.rotation.z = side * -0.055;
+    rearTowerBlend.castShadow = true;
+    rearTowerBlend.receiveShadow = true;
+    machine.add(rearTowerBlend);
 
     const sideSkirt = roundedBox(0.72, 0.68, 3.6, 0.24, wornBlack);
     sideSkirt.position.set(side * 4.28, 0.18, 1.92);
@@ -1034,26 +1135,41 @@ function addTypebars(machine, brass, black) {
   for (let i = 0; i < count; i += 1) {
     const t = count === 1 ? 0 : i / (count - 1);
     const side = Math.abs(t - 0.5);
-    const spread = (t - 0.5) * 4.35;
-    const start = new THREE.Vector3(spread, 1.0, 0.86 + side * 0.18);
+    const spread = (t - 0.5) * 4.1;
+    const start = new THREE.Vector3(spread, 0.96, 0.4 + side * 0.08);
     const target = getPrintHeadTarget();
-    const rest = new THREE.Vector3(spread * 0.38, 1.52 + (0.5 - side) * 0.22, 0.14 + side * 0.16);
-    const rod = cylinderBetween(start, rest, 0.014, brass);
-    const slug = roundedBox(0.17, 0.13, 0.07, 0.018, black);
+    const rest = new THREE.Vector3(spread * 0.34, 1.22 + (0.5 - side) * 0.16, -0.12 + side * 0.08);
+    const rod = cylinderBetween(start, rest, 0.012, brass);
+    const slug = roundedBox(0.15, 0.11, 0.06, 0.016, black);
     slug.position.copy(rest);
     slug.lookAt(getPrintSlugLookTarget(target));
-    const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), brass);
+    const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.048, 14, 10), brass);
     hinge.position.copy(start);
-    const arm = { start, rest, target, arcHeight: 0.22 + side * 0.08, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
+    const arm = { start, rest, target, arcHeight: 0.34 + side * 0.1, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
 
-  const basket = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.035, 12, 112, Math.PI), brass);
-  basket.position.set(0, 1.02, 0.82);
+  const basket = new THREE.Mesh(new THREE.TorusGeometry(2.06, 0.032, 12, 112, Math.PI), brass);
+  basket.position.set(0, 0.95, 0.42);
   basket.rotation.x = Math.PI * 0.5;
   basket.rotation.z = Math.PI;
   machine.add(basket);
+
+  const hingeRail = cylinderBetween(
+    new THREE.Vector3(-2.1, 0.96, 0.4),
+    new THREE.Vector3(2.1, 0.96, 0.4),
+    0.026,
+    brass
+  );
+  machine.add(hingeRail);
+
+  const segmentCover = roundedBox(4.28, 0.12, 0.24, 0.08, black);
+  segmentCover.position.set(0, 0.88, 0.64);
+  segmentCover.rotation.x = -0.12;
+  segmentCover.castShadow = true;
+  segmentCover.receiveShadow = true;
+  machine.add(segmentCover);
 }
 
 function addActiveHammer(machine, brass, black) {
@@ -1228,31 +1344,38 @@ function addKeyLinkages(machine, brass, black) {
   });
 
   printableKeys.forEach((key, index) => {
-    const start = new THREE.Vector3(key.position.x, key.position.y - 0.42, key.position.z - 0.08);
-    const target = new THREE.Vector3(key.position.x * 0.34, 0.78, 0.98 + Math.abs(key.position.x) * 0.03);
-    const rod = cylinderBetween(start, target, index % 3 === 0 ? 0.01 : 0.008, linkageMaterial);
+    const value = key.userData.value;
+    const arm = sceneState.typebars[keyIndexForValue(value) % sceneState.typebars.length];
+    const start = new THREE.Vector3(key.position.x, key.position.y - 0.44, key.position.z - 0.1);
+    const pivot = new THREE.Vector3(key.position.x * 0.28, 0.66, 0.78 + Math.abs(key.position.x) * 0.015);
+    const hingeTarget = arm ? arm.start.clone().add(new THREE.Vector3(0, -0.045, 0.02)) : pivot;
+    const rod = cylinderBetween(start, pivot, index % 3 === 0 ? 0.009 : 0.007, linkageMaterial);
     rod.castShadow = true;
     machine.add(rod);
 
+    const rearRod = cylinderBetween(pivot, hingeTarget, 0.007, linkageMaterial);
+    rearRod.castShadow = true;
+    machine.add(rearRod);
+
     if (index % 5 === 0) {
       const pivot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), brass);
-      pivot.position.copy(target);
+      pivot.position.copy(hingeTarget);
       pivot.castShadow = true;
       machine.add(pivot);
     }
   });
 
-  const linkageComb = roundedBox(5.35, 0.1, 0.22, 0.06, pivotMaterial);
-  linkageComb.position.set(0, 0.78, 1.02);
+  const linkageComb = roundedBox(5.1, 0.09, 0.18, 0.055, pivotMaterial);
+  linkageComb.position.set(0, 0.66, 0.82);
   linkageComb.rotation.x = -0.1;
   linkageComb.castShadow = true;
   linkageComb.receiveShadow = true;
   machine.add(linkageComb);
 
   const rearPivotRail = cylinderBetween(
-    new THREE.Vector3(-2.65, 0.88, 0.9),
-    new THREE.Vector3(2.65, 0.88, 0.9),
-    0.026,
+    new THREE.Vector3(-2.48, 0.72, 0.74),
+    new THREE.Vector3(2.48, 0.72, 0.74),
+    0.022,
     brass
   );
   machine.add(rearPivotRail);
@@ -1374,12 +1497,30 @@ function addAssemblyConnectors(machine, black, wornBlack, brass, darkRubber) {
   frontCrossmember.receiveShadow = true;
   machine.add(frontCrossmember);
 
-  const basketConnector = roundedBox(5.25, 0.12, 0.34, 0.12, wornBlack);
-  basketConnector.position.set(0, 1.0, 1.28);
+  const basketConnector = roundedBox(4.9, 0.12, 0.26, 0.1, wornBlack);
+  basketConnector.position.set(0, 0.88, 0.72);
   basketConnector.rotation.x = -0.14;
   basketConnector.castShadow = true;
   basketConnector.receiveShadow = true;
   machine.add(basketConnector);
+
+  [-1, 1].forEach((side) => {
+    const basketTie = cylinderBetween(
+      new THREE.Vector3(side * 2.1, 0.96, 0.42),
+      new THREE.Vector3(side * 3.15, 1.3, 0.18),
+      0.022,
+      brass
+    );
+    machine.add(basketTie);
+
+    const spoolBrace = cylinderBetween(
+      new THREE.Vector3(side * 2.3, 1.08, 0.18),
+      new THREE.Vector3(side * 3.15, 1.28, 0.17),
+      0.016,
+      brass
+    );
+    machine.add(spoolBrace);
+  });
 
   [-0.5, 0.5].forEach((x) => {
     const vibratorTrack = cylinderBetween(
@@ -1762,6 +1903,7 @@ function gatePrintedCharacter(row, col) {
 }
 
 function moveToNextTabStop() {
+  input.focus({ preventScroll: true });
   const fallbackStop = Math.min(typewriterState.rightMargin, Math.ceil((typewriterState.col + 1) / 8) * 8);
   const nextStop = tabStops.find((stop) => stop > typewriterState.col && stop <= typewriterState.rightMargin) ?? fallbackStop;
   if (nextStop <= typewriterState.col) {
@@ -1781,6 +1923,7 @@ function moveToNextTabStop() {
 }
 
 function moveRoller(delta) {
+  input.focus({ preventScroll: true });
   typewriterState.rollOffset = Math.max(
     -paperMetrics.lineHeight * 6,
     Math.min(paperMetrics.lineHeight * 6, typewriterState.rollOffset + delta * (paperMetrics.lineHeight / 3))
@@ -1793,6 +1936,7 @@ function moveRoller(delta) {
 }
 
 function returnCarriage() {
+  input.focus({ preventScroll: true });
   typewriterState.row += 1;
   typewriterState.col = typewriterState.leftMargin;
   typewriterState.lastBellColumn = -1;
