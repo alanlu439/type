@@ -589,6 +589,7 @@ function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
   basketRim.rotation.z = Math.PI;
   basketRim.castShadow = true;
   basketRim.receiveShadow = true;
+  basketRim.visible = false;
   machine.add(basketRim);
 
   const innerRim = new THREE.Mesh(new THREE.TorusGeometry(1.58, 0.028, 10, 96, Math.PI), brass);
@@ -596,6 +597,7 @@ function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
   innerRim.rotation.x = Math.PI * 0.54;
   innerRim.rotation.z = Math.PI;
   innerRim.castShadow = true;
+  innerRim.visible = false;
   machine.add(innerRim);
 
   for (let i = 0; i <= 48; i += 1) {
@@ -608,6 +610,7 @@ function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
     tooth.rotation.y = -angle + Math.PI / 2;
     tooth.rotation.x = -0.22;
     tooth.castShadow = true;
+    tooth.visible = false;
     machine.add(tooth);
   }
 
@@ -742,6 +745,28 @@ function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
   centerMask.receiveShadow = true;
   machine.add(centerMask);
 
+  const rearKeyboardHood = roundedBox(7.42, 0.34, 0.72, 0.28, enamel);
+  rearKeyboardHood.position.set(0, 0.9, 0.94);
+  rearKeyboardHood.rotation.x = -0.16;
+  rearKeyboardHood.castShadow = true;
+  rearKeyboardHood.receiveShadow = true;
+  machine.add(rearKeyboardHood);
+
+  const keyBankBackPlate = roundedBox(6.86, 0.42, 0.36, 0.16, enamel);
+  keyBankBackPlate.position.set(0, 1.0, 0.74);
+  keyBankBackPlate.rotation.x = -0.16;
+  keyBankBackPlate.castShadow = true;
+  keyBankBackPlate.receiveShadow = true;
+  machine.add(keyBankBackPlate);
+
+  const keyBankTrim = cylinderBetween(
+    new THREE.Vector3(-3.25, 1.22, 0.86),
+    new THREE.Vector3(3.25, 1.22, 0.86),
+    0.016,
+    brass
+  );
+  machine.add(keyBankTrim);
+
   const leftKeyDeck = roundedBox(2.0, 0.32, 3.62, 0.34, enamel);
   leftKeyDeck.position.set(-3.55, 0.72, 1.98);
   leftKeyDeck.rotation.x = -0.12;
@@ -765,8 +790,8 @@ function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
   rearBasketCover.receiveShadow = true;
   machine.add(rearBasketCover);
 
-  const segmentApron = roundedBox(6.28, 0.22, 0.82, 0.26, enamel);
-  segmentApron.position.set(0, 0.74, 0.43);
+  const segmentApron = roundedBox(6.28, 0.3, 0.9, 0.26, enamel);
+  segmentApron.position.set(0, 0.72, 0.48);
   segmentApron.rotation.x = -0.08;
   segmentApron.castShadow = true;
   segmentApron.receiveShadow = true;
@@ -1135,37 +1160,42 @@ function addTypebars(machine, brass, black) {
   for (let i = 0; i < count; i += 1) {
     const t = count === 1 ? 0 : i / (count - 1);
     const side = Math.abs(t - 0.5);
-    const spread = (t - 0.5) * 4.1;
-    const start = new THREE.Vector3(spread, 0.96, 0.4 + side * 0.08);
+    const spread = (t - 0.5) * 3.96;
+    const start = new THREE.Vector3(spread, 0.84, 0.26 + side * 0.06);
     const target = getPrintHeadTarget();
-    const rest = new THREE.Vector3(spread * 0.34, 1.22 + (0.5 - side) * 0.16, -0.12 + side * 0.08);
+    const rest = new THREE.Vector3(spread * 0.34, 1.06 + (0.5 - side) * 0.14, -0.18 + side * 0.08);
     const rod = cylinderBetween(start, rest, 0.012, brass);
     const slug = roundedBox(0.15, 0.11, 0.06, 0.016, black);
     slug.position.copy(rest);
     slug.lookAt(getPrintSlugLookTarget(target));
     const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.048, 14, 10), brass);
     hinge.position.copy(start);
-    const arm = { start, rest, target, arcHeight: 0.34 + side * 0.1, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
+    rod.visible = false;
+    slug.visible = false;
+    hinge.visible = false;
+    const arm = { start, rest, target, arcHeight: 0.44 + side * 0.12, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
 
   const basket = new THREE.Mesh(new THREE.TorusGeometry(2.06, 0.032, 12, 112, Math.PI), brass);
-  basket.position.set(0, 0.95, 0.42);
+  basket.position.set(0, 0.82, 0.3);
   basket.rotation.x = Math.PI * 0.5;
   basket.rotation.z = Math.PI;
+  basket.visible = false;
   machine.add(basket);
 
   const hingeRail = cylinderBetween(
-    new THREE.Vector3(-2.1, 0.96, 0.4),
-    new THREE.Vector3(2.1, 0.96, 0.4),
+    new THREE.Vector3(-2.02, 0.84, 0.26),
+    new THREE.Vector3(2.02, 0.84, 0.26),
     0.026,
     brass
   );
+  hingeRail.visible = false;
   machine.add(hingeRail);
 
   const segmentCover = roundedBox(4.28, 0.12, 0.24, 0.08, black);
-  segmentCover.position.set(0, 0.88, 0.64);
+  segmentCover.position.set(0, 0.76, 0.54);
   segmentCover.rotation.x = -0.12;
   segmentCover.castShadow = true;
   segmentCover.receiveShadow = true;
@@ -2326,6 +2356,10 @@ function animate() {
       arm.intensity = 0;
       arm.strikeStart = -Infinity;
     }
+    const barVisible = lift > 0.025;
+    arm.rod.visible = barVisible;
+    arm.slug.visible = barVisible;
+    arm.hinge.visible = barVisible;
     const end = typebarTipPosition(arm, lift);
     end.y += state.shiftLift * 0.055;
     const impact = typebarImpact(elapsed, arm.intensity);
