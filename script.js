@@ -114,7 +114,8 @@ const typewriterState = {
   marginRelease: false,
   lastBellColumn: -1,
   rollOffset: 0,
-  correctionMode: false
+  correctionMode: false,
+  overstrikes: []
 };
 
 const sceneState = {
@@ -164,6 +165,7 @@ let audioContext;
 let soundEnabled = true;
 let statusTimer;
 let stateSaveTimer;
+let lastMachineValue = "";
 
 initScene();
 if (!restoreState()) {
@@ -171,6 +173,7 @@ if (!restoreState()) {
   input.setSelectionRange(input.value.length, input.value.length);
   setSidebarExpanded(true, { focus: false, persist: false });
 }
+rememberMachineValue();
 syncCarriageFromInput();
 renderPage();
 updateFocusButton();
@@ -184,14 +187,47 @@ stage.addEventListener("pointerdown", () => {
 input.addEventListener("focus", () => setStatus("Writing"));
 input.addEventListener("blur", () => setStatus("Ready"));
 
-input.addEventListener("input", () => {
+input.addEventListener("beforeinput", (event) => {
+  if (handleMachineBeforeInput(event)) {
+    event.preventDefault();
+  }
+});
+
+input.addEventListener("input", (event) => {
+  if (input.value !== lastMachineValue) {
+    const nextValue = input.value;
+    input.value = lastMachineValue;
+    setTextareaCaretFromCarriage();
+    if (handleMachineInputMutation(event, nextValue)) {
+      return;
+    }
+    renderPage();
+    setTemporaryStatus("Use keys");
+    return;
+  }
   setStatus("Writing");
   syncCarriageFromInput();
   renderPage();
   queueSaveState();
 });
 
+input.addEventListener("paste", blockEditorTransfer);
+input.addEventListener("drop", blockEditorTransfer);
+input.addEventListener("cut", blockEditorTransfer);
+input.addEventListener("copy", blockEditorTransfer);
+input.addEventListener("select", () => setTextareaCaretFromCarriage());
+input.addEventListener("click", () => setTextareaCaretFromCarriage());
+input.addEventListener("pointerup", () => setTextareaCaretFromCarriage());
+
 input.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && isEditorShortcut(event)) {
+    event.preventDefault();
+    setTextareaCaretFromCarriage();
+    setTemporaryStatus("No editor actions");
+    playThud();
+    return;
+  }
+
   if (event.metaKey || event.ctrlKey) {
     return;
   }
@@ -1776,9 +1812,114 @@ function releaseTypewriterModifier(event) {
   }
 }
 
+function handleMachineBeforeInput(event) {
+  const inputType = event.inputType || "";
+  if (inputType.startsWith("insertFrom") || inputType.startsWith("deleteBy")) {
+    setTemporaryStatus("No editor actions");
+    playThud();
+    return true;
+  }
+
+  if (inputType.startsWith("insert") && event.data == null) {
+    return false;
+  }
+
+  if (inputType.startsWith("insert") && event.data != null) {
+    const data = event.data || "";
+    if ([...data].length === 1) {
+      ensureAudio();
+      printTypewriterCharacter(data);
+    } else {
+      setTemporaryStatus("One key at a time");
+      playThud();
+    }
+    return true;
+  }
+
+  if (inputType === "insertLineBreak" || inputType === "insertParagraph") {
+    ensureAudio();
+    returnCarriage();
+    return true;
+  }
+
+  if (inputType === "deleteContentBackward") {
+    ensureAudio();
+    moveCarriage(-1);
+    strikeMachine("Backspace");
+    playThud();
+    return true;
+  }
+
+  if (inputType === "deleteContentForward") {
+    ensureAudio();
+    applyWhiteout();
+    return true;
+  }
+
+  if (inputType) {
+    setTextareaCaretFromCarriage();
+    return true;
+  }
+
+  return false;
+}
+
+function handleMachineInputMutation(event, nextValue) {
+  const inputType = event.inputType || "";
+  if (!inputType.startsWith("insert")) {
+    return false;
+  }
+
+  const inferred = inferSingleInsertedCharacter(lastMachineValue, nextValue);
+  const eventData = typeof event.data === "string" && [...event.data].length === 1 ? event.data : "";
+  const inserted = inferred && (!eventData || eventData === inferred) ? inferred : "";
+
+  if (inserted) {
+    ensureAudio();
+    printTypewriterCharacter(inserted);
+    return true;
+  }
+
+  setTemporaryStatus("One key at a time");
+  playThud();
+  return false;
+}
+
+function inferSingleInsertedCharacter(previous, next) {
+  if (typeof previous !== "string" || typeof next !== "string" || next.length - previous.length !== 1) {
+    return "";
+  }
+
+  let start = 0;
+  while (start < previous.length && previous[start] === next[start]) {
+    start += 1;
+  }
+
+  let previousEnd = previous.length - 1;
+  let nextEnd = next.length - 1;
+  while (previousEnd >= start && previous[previousEnd] === next[nextEnd]) {
+    previousEnd -= 1;
+    nextEnd -= 1;
+  }
+
+  return next.slice(start, nextEnd + 1);
+}
+
+function blockEditorTransfer(event) {
+  event.preventDefault();
+  setTextareaCaretFromCarriage();
+  setTemporaryStatus("No editor actions");
+  playThud();
+}
+
 function typeIntoTypewriter(event) {
   const key = event.key === "Spacebar" ? " " : event.key;
   ensureAudio();
+
+  if (event.repeat) {
+    setTemporaryStatus("One strike at a time", 500);
+    return true;
+  }
 
   if (event.altKey) {
     typewriterState.marginRelease = true;
@@ -1786,7 +1927,7 @@ function typeIntoTypewriter(event) {
 
   if (key === "Shift" || key === "CapsLock") {
     strikeMachine(key);
-    playKey(0.055);
+    playShift();
     return true;
   }
 
@@ -1874,6 +2015,10 @@ function writePaperLines(lines) {
   queueSaveState();
 }
 
+function rememberMachineValue() {
+  lastMachineValue = input.value;
+}
+
 function printTypewriterCharacter(character) {
   if (typewriterState.col >= typewriterState.rightMargin && !typewriterState.marginRelease) {
     setTemporaryStatus("Right margin");
@@ -1888,6 +2033,7 @@ function printTypewriterCharacter(character) {
   if (typewriterState.correctionMode) {
     const currentLine = lines[typewriterState.row].padEnd(column + 1, " ");
     lines[typewriterState.row] = `${currentLine.slice(0, column)} ${currentLine.slice(column + 1)}`;
+    removeOverstrikesAt(typewriterState.row, column);
     typewriterState.correctionMode = false;
     setTemporaryStatus("Corrected");
     strikeMachine(character);
@@ -1897,16 +2043,40 @@ function printTypewriterCharacter(character) {
   }
 
   const currentLine = lines[typewriterState.row].padEnd(column + 1, " ");
-  lines[typewriterState.row] = `${currentLine.slice(0, column)}${character}${currentLine.slice(column + 1)}`;
-  if (character !== " ") {
+  const existingCharacter = currentLine[column];
+  const shouldOverstrike = character !== " " && existingCharacter && existingCharacter !== " ";
+  if (shouldOverstrike) {
+    addOverstrike(typewriterState.row, column, character);
+  } else {
+    lines[typewriterState.row] = `${currentLine.slice(0, column)}${character}${currentLine.slice(column + 1)}`;
+  }
+  if (character !== " " && !shouldOverstrike) {
     gatePrintedCharacter(typewriterState.row, column);
   }
   typewriterState.col += 1;
   setStatus("Writing");
   strikeMachine(character);
-  playKey();
+  if (character === " ") {
+    playSpace();
+  } else {
+    playKey();
+  }
   writePaperLines(lines);
   ringMarginBell();
+}
+
+function addOverstrike(row, col, character) {
+  typewriterState.overstrikes.push({
+    row,
+    col,
+    character,
+    seed: row * 911 + col * 37 + character.charCodeAt(0) * 13 + typewriterState.overstrikes.length,
+    revealAt: performance.now() + printHeadMetrics.strikeContactTime + 16
+  });
+}
+
+function removeOverstrikesAt(row, col) {
+  typewriterState.overstrikes = typewriterState.overstrikes.filter((mark) => mark.row !== row || mark.col !== col);
 }
 
 function moveCarriage(delta) {
@@ -2039,7 +2209,13 @@ function setTextareaCaretFromCarriage() {
   lines[typewriterState.row] = lines[typewriterState.row].padEnd(column, " ");
   const index = lines.slice(0, typewriterState.row).reduce((sum, line) => sum + line.length + 1, 0) + column;
   input.value = lines.join("\n");
+  rememberMachineValue();
   input.setSelectionRange(index, index);
+}
+
+function isEditorShortcut(event) {
+  const key = String(event.key || "").toLowerCase();
+  return ["a", "c", "v", "x", "z", "y"].includes(key);
 }
 
 function ringMarginBell() {
@@ -2180,6 +2356,17 @@ function drawPaper() {
   const paperLines = input.value ? input.value.split(/\r?\n/) : [""];
   const now = performance.now();
   sceneState.printGates = sceneState.printGates.filter((gate) => now < gate.revealAt);
+  const drawTypedMark = (char, x, y, seed, baseAlpha = 0.84) => {
+    if (char === " ") {
+      return;
+    }
+    context.globalAlpha = baseAlpha + Math.abs(jitter(seed, 0.1));
+    context.save();
+    context.translate(x + jitter(seed, 0.85), y + jitter(seed + 17, 1.1));
+    context.rotate((jitter(seed + 29, 0.22) * Math.PI) / 180);
+    context.fillText(char, 0, 0);
+    context.restore();
+  };
   const firstVisibleLine = Math.max(0, typewriterState.row - 8);
   const lastVisibleLine = Math.min(paperLines.length, firstVisibleLine + 12);
   for (let lineIndex = firstVisibleLine; lineIndex < lastVisibleLine; lineIndex += 1) {
@@ -2194,14 +2381,15 @@ function drawPaper() {
         x += paperMetrics.charPitch;
         return;
       }
-      context.globalAlpha = 0.84 + Math.abs(jitter(charIndex + lineIndex * 31, 0.1));
-      context.save();
-      context.translate(x + jitter(charIndex, 0.85), y + jitter(charIndex + 17, 1.1));
-      context.rotate((jitter(charIndex + 29, 0.22) * Math.PI) / 180);
-      context.fillText(char, 0, 0);
-      context.restore();
+      drawTypedMark(char, x, y, charIndex + lineIndex * 31);
       x += paperMetrics.charPitch;
     });
+    typewriterState.overstrikes
+      .filter((mark) => mark.row === lineIndex && now >= mark.revealAt)
+      .forEach((mark) => {
+        const markX = paperMetrics.marginX + mark.col * paperMetrics.charPitch;
+        drawTypedMark(mark.character, markX, y, mark.seed, 0.58);
+      });
   }
   context.globalAlpha = 1;
 
@@ -2616,6 +2804,17 @@ function restoreState() {
   typewriterState.rollOffset = Number.isFinite(saved.rollOffset) ? Math.max(-paperMetrics.lineHeight * 6, Math.min(paperMetrics.lineHeight * 6, saved.rollOffset)) : 0;
   typewriterState.marginRelease = false;
   typewriterState.correctionMode = false;
+  typewriterState.overstrikes = Array.isArray(saved.overstrikes)
+    ? saved.overstrikes
+      .filter((mark) => Number.isFinite(mark.row) && Number.isFinite(mark.col) && typeof mark.character === "string" && mark.character.length === 1)
+      .map((mark, index) => ({
+        row: Math.max(0, Math.floor(mark.row)),
+        col: Math.max(0, Math.floor(mark.col)),
+        character: mark.character,
+        seed: Number.isFinite(mark.seed) ? mark.seed : index * 97,
+        revealAt: 0
+      }))
+    : [];
   typewriterState.lastBellColumn = -1;
 
   soundEnabled = saved.soundEnabled !== false;
@@ -2677,6 +2876,7 @@ function saveStateNow() {
       leftMargin: typewriterState.leftMargin,
       rightMargin: typewriterState.rightMargin,
       rollOffset: typewriterState.rollOffset,
+      overstrikes: typewriterState.overstrikes.map(({ row, col, character, seed }) => ({ row, col, character, seed })),
       ink: sceneState.ink,
       paperTone: sceneState.paperTone,
       paperAngle: sceneState.targetPaperAngle,
@@ -2703,6 +2903,7 @@ function clearPage() {
   typewriterState.col = 0;
   typewriterState.rollOffset = 0;
   typewriterState.correctionMode = false;
+  typewriterState.overstrikes = [];
   resetMargins();
   sceneState.zoom = 1;
   sceneState.focusMode = false;
@@ -2753,6 +2954,7 @@ function applyWhiteout() {
   }
   lines[typewriterState.row] = line.padEnd(column + 1, " ");
   lines[typewriterState.row] = `${lines[typewriterState.row].slice(0, column)} ${lines[typewriterState.row].slice(column + 1)}`;
+  removeOverstrikesAt(typewriterState.row, column);
   typewriterState.col = column + 1;
   writePaperLines(lines);
   input.focus({ preventScroll: true });
@@ -2978,6 +3180,37 @@ function playKey(volume = 0.13) {
   osc.start(now);
   osc.stop(now + 0.055);
   playNoise(volume * 0.38, 0.026);
+}
+
+function playSpace() {
+  if (!canPlay()) {
+    return;
+  }
+
+  const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(118, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.075, now + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+
+  osc.connect(gain);
+  gain.connect(audioContext.destination);
+  osc.start(now);
+  osc.stop(now + 0.065);
+  playNoise(0.018, 0.028);
+}
+
+function playShift() {
+  if (!canPlay()) {
+    return;
+  }
+
+  playThud();
+  window.setTimeout(() => playKey(0.045), 24);
 }
 
 function playReturn() {

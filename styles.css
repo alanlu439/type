@@ -402,6 +402,8 @@ body.controls-hidden .rail-peek {
   opacity: 0;
   color: transparent;
   caret-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
   background: transparent;
   border: 0;
   outline: 0;
