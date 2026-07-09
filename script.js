@@ -1033,28 +1033,25 @@ function addTypebars(machine, brass, black) {
   const count = 31;
   for (let i = 0; i < count; i += 1) {
     const t = count === 1 ? 0 : i / (count - 1);
-    const spread = (t - 0.5) * 4.85;
-    const start = new THREE.Vector3(spread, 0.98, 0.72 + Math.abs(t - 0.5) * 0.22);
+    const side = Math.abs(t - 0.5);
+    const spread = (t - 0.5) * 4.35;
+    const start = new THREE.Vector3(spread, 1.0, 0.86 + side * 0.18);
     const target = getPrintHeadTarget();
-    const length = start.distanceTo(target);
-    const restBase = new THREE.Vector3(spread * 0.34, 1.2, 2.85 + Math.abs(t - 0.5) * 0.3);
-    const restDirection = restBase.sub(start).normalize();
-    const rest = start.clone().add(restDirection.multiplyScalar(length));
-    const apex = new THREE.Vector3(spread * 0.12, 2.64, -0.4);
-    const rod = cylinderBetween(start, rest, 0.017, brass);
-    const slug = roundedBox(0.19, 0.15, 0.08, 0.02, black);
+    const rest = new THREE.Vector3(spread * 0.38, 1.52 + (0.5 - side) * 0.22, 0.14 + side * 0.16);
+    const rod = cylinderBetween(start, rest, 0.014, brass);
+    const slug = roundedBox(0.17, 0.13, 0.07, 0.018, black);
     slug.position.copy(rest);
     slug.lookAt(getPrintSlugLookTarget(target));
     const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), brass);
     hinge.position.copy(start);
-    const arm = { start, rest, apex, target, length, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
+    const arm = { start, rest, target, arcHeight: 0.22 + side * 0.08, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
 
-  const basket = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.035, 12, 96, Math.PI), brass);
-  basket.position.set(0, 1.03, 0.35);
-  basket.rotation.x = Math.PI * 0.53;
+  const basket = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.035, 12, 112, Math.PI), brass);
+  basket.position.set(0, 1.02, 0.82);
+  basket.rotation.x = Math.PI * 0.5;
   basket.rotation.z = Math.PI;
   machine.add(basket);
 }
@@ -2051,10 +2048,12 @@ function updateCarriage() {
 
 function typebarTipPosition(arm, lift) {
   const t = Math.max(0, Math.min(1, lift));
-  const restDirection = new THREE.Vector3().subVectors(arm.rest, arm.start).normalize();
-  const targetDirection = new THREE.Vector3().subVectors(arm.target, arm.start).normalize();
-  const direction = restDirection.lerp(targetDirection, easeInOutSine(t)).normalize();
-  return arm.start.clone().add(direction.multiplyScalar(arm.length));
+  const eased = easeInOutSine(t);
+  const end = arm.rest.clone().lerp(arm.target, eased);
+  const arc = Math.sin(eased * Math.PI) * (arm.arcHeight || 0.22);
+  end.y += arc;
+  end.z -= arc * 0.18;
+  return end;
 }
 
 function typebarLift(elapsed, intensity = 1) {
