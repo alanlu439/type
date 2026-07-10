@@ -259,11 +259,11 @@ a {
   z-index: 4;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto;
+  grid-template-rows: auto minmax(0, 1fr);
   width: auto;
   min-height: 0;
-  max-height: min(20svh, 8.2rem);
-  overflow: hidden;
+  max-height: min(28svh, 10.6rem);
+  overflow: visible;
   border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 8px;
   color: #292720;
@@ -278,6 +278,10 @@ a {
   transition: transform 220ms ease, opacity 220ms ease;
 }
 
+.command-rail[hidden] {
+  display: none;
+}
+
 body.controls-hidden .command-rail {
   pointer-events: none;
   opacity: 0;
@@ -285,13 +289,57 @@ body.controls-hidden .command-rail {
 }
 
 .rail-actions {
+  grid-row: 2;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-content: center;
   gap: 0.5rem;
   min-height: 0;
-  padding: 0.75rem;
-  overflow: auto;
+  padding: 0 0.75rem 0.75rem;
+  overflow: visible;
+}
+
+.rail-header {
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.62rem 0.75rem 0.54rem;
+}
+
+.rail-header strong {
+  color: #241f17;
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.rail-mode,
+.rail-collapse {
+  min-width: 0;
+  min-height: 2rem;
+  border: 1px solid rgba(47, 38, 27, 0.16);
+  border-radius: 7px;
+  color: #241f17;
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 780;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.rail-mode {
+  justify-self: start;
+  padding: 0 0.64rem;
+  color: #162316;
+}
+
+.rail-mode[aria-pressed="false"] {
+  color: #372019;
+  background: rgba(255, 236, 218, 0.8);
+}
+
+.rail-collapse {
+  padding: 0 0.68rem;
 }
 
 .rail-command,
@@ -303,6 +351,7 @@ body.controls-hidden .command-rail {
 }
 
 .rail-command {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -319,6 +368,34 @@ body.controls-hidden .command-rail {
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
+.rail-command::after {
+  position: absolute;
+  left: 0.35rem;
+  right: 0.35rem;
+  bottom: calc(100% + 0.42rem);
+  z-index: 9;
+  pointer-events: none;
+  content: attr(data-tooltip);
+  padding: 0.46rem 0.58rem;
+  border: 1px solid rgba(47, 38, 27, 0.18);
+  border-radius: 7px;
+  color: #241f17;
+  background: rgba(255, 250, 241, 0.98);
+  box-shadow: 0 12px 32px rgba(32, 24, 15, 0.22);
+  font-size: 0.68rem;
+  font-weight: 720;
+  line-height: 1.25;
+  opacity: 0;
+  transform: translateY(0.25rem);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.rail-command:hover::after,
+.rail-command:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .rail-command span {
   min-width: 0;
   overflow: hidden;
@@ -328,6 +405,10 @@ body.controls-hidden .command-rail {
 
 .rail-command:hover,
 .rail-command:focus-visible,
+.rail-mode:hover,
+.rail-mode:focus-visible,
+.rail-collapse:hover,
+.rail-collapse:focus-visible,
 .rail-peek:hover,
 .rail-peek:focus-visible {
   border-color: rgba(255, 101, 52, 0.72);
@@ -365,6 +446,10 @@ body.controls-hidden .command-rail {
   pointer-events: none;
   transform: translateY(0.6rem);
   transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.rail-peek[hidden] {
+  display: none;
 }
 
 body.controls-hidden .rail-peek {
@@ -407,6 +492,121 @@ body.controls-hidden .rail-peek {
   background: transparent;
   border: 0;
   outline: 0;
+}
+
+.intro-hint {
+  position: fixed;
+  left: 50%;
+  top: min(31svh, 17rem);
+  z-index: 4;
+  pointer-events: none;
+  transform: translateX(-50%);
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(255, 232, 188, 0.2);
+  border-radius: 8px;
+  color: #fff8ea;
+  background:
+    linear-gradient(180deg, rgba(32, 28, 22, 0.88), rgba(9, 8, 7, 0.74)),
+    rgba(8, 7, 6, 0.72);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  font-size: 0.92rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  opacity: 1;
+  transition: opacity 360ms ease, transform 360ms ease;
+}
+
+body.intro-dismissed .intro-hint {
+  opacity: 0;
+  transform: translate(-50%, -0.5rem);
+}
+
+.mobile-assist,
+.mobile-keyboard {
+  display: none;
+}
+
+.mobile-assist {
+  position: fixed;
+  left: 0.65rem;
+  right: 0.65rem;
+  top: 4.05rem;
+  z-index: 4;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(255, 232, 188, 0.16);
+  border-radius: 8px;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, rgba(32, 28, 23, 0.84), rgba(9, 8, 7, 0.76)),
+    rgba(9, 8, 7, 0.74);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.mobile-assist button,
+.mobile-keyboard button {
+  border: 1px solid rgba(47, 38, 27, 0.16);
+  border-radius: 7px;
+  color: #201b16;
+  background: linear-gradient(180deg, #fffaf2, #e9ddc8);
+  font-weight: 820;
+}
+
+.mobile-assist button {
+  flex: 0 0 auto;
+  min-height: 1.75rem;
+  padding: 0 0.54rem;
+  font-size: 0.68rem;
+}
+
+.mobile-keyboard {
+  position: fixed;
+  left: 0.65rem;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  z-index: 7;
+  gap: 0.35rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  background: rgba(245, 240, 230, 0.97);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
+}
+
+body.mobile-keyboard-open .mobile-keyboard {
+  display: grid;
+}
+
+body.mobile-keyboard-open .command-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.mobile-keyboard-open .rail-peek {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mobile-key-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.24rem;
+}
+
+.mobile-keyboard button {
+  min-width: 1.72rem;
+  min-height: 2.02rem;
+  padding: 0 0.42rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+}
+
+.mobile-keyboard .mobile-space {
+  width: min(14rem, 76%);
 }
 
 .ui-icon {
@@ -473,9 +673,9 @@ body.controls-hidden .rail-peek {
     bottom: 0.85rem;
     width: auto;
     min-height: 0;
-    max-height: min(22svh, 8.2rem);
+    max-height: min(26svh, 10.2rem);
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .rail-actions {
@@ -483,8 +683,12 @@ body.controls-hidden .rail-peek {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     align-content: center;
     gap: 0.44rem;
-    padding: 0.72rem;
-    overflow-x: hidden;
+    padding: 0 0.72rem 0.72rem;
+    overflow: visible;
+  }
+
+  .rail-header {
+    padding: 0.58rem 0.72rem 0.5rem;
   }
 
   .rail-command {
@@ -568,6 +772,13 @@ body.controls-hidden .rail-peek {
     height: 1.28rem;
   }
 
+  .intro-hint {
+    top: 7.3rem;
+    width: max-content;
+    max-width: calc(100vw - 1.3rem);
+    font-size: 0.8rem;
+  }
+
   .command-rail {
     top: auto;
     right: 0.65rem;
@@ -577,7 +788,7 @@ body.controls-hidden .rail-peek {
     min-height: 0;
     max-height: 29svh;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .rail-actions {
@@ -585,9 +796,41 @@ body.controls-hidden .rail-peek {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
     gap: 0.42rem;
-    padding: 0.7rem;
+    padding: 0 0.7rem 0.7rem;
     overflow-x: hidden;
     overflow-y: auto;
+  }
+
+  .rail-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.38rem;
+    padding: 0.55rem 0.7rem 0.46rem;
+  }
+
+  .rail-header strong {
+    font-size: 0.82rem;
+  }
+
+  .rail-mode,
+  .rail-collapse {
+    min-height: 1.9rem;
+    font-size: 0.66rem;
+  }
+
+  .rail-mode {
+    padding: 0 0.42rem;
+  }
+
+  .rail-collapse {
+    padding: 0 0.5rem;
+  }
+
+  .rail-command::after {
+    display: none;
+  }
+
+  .mobile-assist {
+    display: flex;
   }
 
   .rail-command {

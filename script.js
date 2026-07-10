@@ -10,6 +10,7 @@ const exportPdfButton = document.querySelector("[data-export-pdf]");
 const resetButton = document.querySelector("[data-reset]");
 const focusButton = document.querySelector("[data-focus-mode]");
 const focusLabel = document.querySelector("[data-focus-label]");
+const introHint = document.querySelector("[data-intro-hint]");
 const clearPageButton = document.querySelector("[data-clear-page]");
 const ribbonCycleButton = document.querySelector("[data-ribbon-cycle]");
 const zoomOutButton = document.querySelector("[data-zoom-out]");
@@ -24,6 +25,12 @@ const rotateLeftButton = document.querySelector("[data-rotate-left]");
 const rotateRightButton = document.querySelector("[data-rotate-right]");
 const leftMarginButton = document.querySelector("[data-left-margin]");
 const rightMarginButton = document.querySelector("[data-right-margin]");
+const realisticBackspaceButton = document.querySelector("[data-realistic-backspace]");
+const realisticBackspaceLabel = document.querySelector("[data-backspace-label]");
+const commandRail = document.querySelector("[data-command-rail]");
+const mobileKeyboardToggle = document.querySelector("[data-mobile-keyboard-toggle]");
+const mobileKeyButtons = Array.from(document.querySelectorAll("[data-mobile-key]"));
+const tooltipButtons = Array.from(document.querySelectorAll("[data-tooltip]"));
 const sidebarToggleButtons = Array.from(document.querySelectorAll("[data-sidebar-toggle]"));
 const soundButtons = Array.from(document.querySelectorAll("[data-sound-toggle]"));
 const soundLabels = Array.from(document.querySelectorAll("[data-sound-label]"));
@@ -43,20 +50,21 @@ const paperMetrics = {
   canvasHeight: 1024,
   planeWidth: 7.8,
   planeHeight: 3.2,
+  planeCenterY: 3.16,
   marginX: 240,
   printLineY: 600,
   lineHeight: 72,
   charPitch: 28
 };
 
-const stateVersion = 3;
+const stateVersion = 4;
 const storageKey = `type-state-v${stateVersion}`;
+const introStorageKey = "type-intro-seen-v1";
 const ribbonShortcutColors = ["#201b17", "#641b1f"];
 
 const printHeadMetrics = {
   glyphCenterX: -0.22,
   glyphCenterY: 32,
-  contactY: 3.535,
   contactZ: -0.42,
   ribbonRestY: 1.9,
   ribbonRestZ: -0.48,
@@ -64,7 +72,7 @@ const printHeadMetrics = {
   strikeContactTime: 58,
   strikeAttackRatio: 0.28,
   strikeDwellRatio: 0.08,
-  escapementDelay: 98
+  escapementDelay: 74
 };
 
 const keyRows = [
@@ -115,7 +123,9 @@ const typewriterState = {
   lastBellColumn: -1,
   rollOffset: 0,
   correctionMode: false,
-  overstrikes: []
+  realisticBackspace: true,
+  overstrikes: [],
+  corrections: []
 };
 
 const sceneState = {
@@ -130,9 +140,9 @@ const sceneState = {
   paperCanvas: null,
   platen: null,
   ribbonGuide: null,
+  impactFlashMesh: null,
+  impactFlashLight: null,
   returnLever: null,
-  strikeHammer: null,
-  activeStrikeArm: null,
   keys: new Map(),
   keyObjects: [],
   typebars: [],
@@ -143,6 +153,7 @@ const sceneState = {
   carriageHoldUntil: 0,
   paperImpact: 0,
   paperImpactStart: 0,
+  impactFlash: 0,
   ribbonPulse: 0,
   ribbonStrikeStart: -Infinity,
   returnSweep: 0,
@@ -179,6 +190,10 @@ rememberMachineValue();
 syncCarriageFromInput();
 renderPage();
 updateFocusButton();
+updateBackspaceModeButton();
+restoreIntroHint();
+hydrateTooltips();
+applyInitialShortcutLayout();
 input.focus({ preventScroll: true });
 
 stage.addEventListener("pointerdown", () => {
@@ -222,6 +237,16 @@ input.addEventListener("click", () => setTextareaCaretFromCarriage());
 input.addEventListener("pointerup", () => setTextareaCaretFromCarriage());
 
 input.addEventListener("keydown", (event) => {
+  if (!["Shift", "Alt", "Control", "Meta", "CapsLock"].includes(event.key)) {
+    dismissIntroHint();
+  }
+
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
+    returnCarriage();
+    return;
+  }
+
   if ((event.metaKey || event.ctrlKey) && isEditorShortcut(event)) {
     event.preventDefault();
     setTextareaCaretFromCarriage();
@@ -297,6 +322,13 @@ rotateLeftButton?.addEventListener("click", () => rotatePaper(-0.05));
 rotateRightButton?.addEventListener("click", () => rotatePaper(0.05));
 leftMarginButton?.addEventListener("click", () => setMargin("left"));
 rightMarginButton?.addEventListener("click", () => setMargin("right"));
+realisticBackspaceButton?.addEventListener("click", () => toggleRealisticBackspace());
+mobileKeyboardToggle?.addEventListener("click", () => toggleMobileKeyboard());
+mobileKeyButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    handleMobileKey(button.dataset.mobileKey || "");
+  });
+});
 sidebarToggleButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const expanded = document.body.classList.contains("controls-hidden");
@@ -425,15 +457,15 @@ function buildTypewriter(scene) {
   scene.add(machine);
 
   const black = new THREE.MeshStandardMaterial({
-    color: 0x11100d,
-    roughness: 0.48,
+    color: 0x191917,
+    roughness: 0.38,
     metalness: 0.72,
-    envMapIntensity: 0.6
+    envMapIntensity: 0.72
   });
   const wornBlack = new THREE.MeshStandardMaterial({
-    color: 0x1b1611,
-    roughness: 0.56,
-    metalness: 0.68
+    color: 0x27211b,
+    roughness: 0.52,
+    metalness: 0.62
   });
   const brass = new THREE.MeshStandardMaterial({
     color: 0xd2a35e,
@@ -458,8 +490,8 @@ function buildTypewriter(scene) {
   addPaper(machine);
   addCarriageDetails(brass, darkRubber, black);
   addRibbon(machine, black, brass, ribbonRed);
+  addPrintPointGuide(machine, brass);
   addTypebars(machine, brass, black);
-  addActiveHammer(machine, brass, black);
   addKeys(machine, black, brass);
   addKeyLinkages(machine, brass, black);
   addLevers(machine, brass, darkRubber);
@@ -571,9 +603,9 @@ function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
     envMapIntensity: 0.72
   });
   const agedSteel = new THREE.MeshStandardMaterial({
-    color: 0xb9aa8d,
-    roughness: 0.38,
-    metalness: 0.82
+    color: 0xb5b0a5,
+    roughness: 0.34,
+    metalness: 0.88
   });
 
   const keyboardSurround = roundedBox(8.95, 0.18, 3.8, 0.32, glossyBlack);
@@ -623,33 +655,30 @@ function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
   machine.add(segmentWell);
 
   const basketRim = new THREE.Mesh(new THREE.TorusGeometry(2.25, 0.08, 14, 120, Math.PI), agedSteel);
-  basketRim.position.set(0, 1.18, 0.62);
+  basketRim.position.set(0, 1.34, 0.36);
   basketRim.rotation.x = Math.PI * 0.54;
   basketRim.rotation.z = Math.PI;
   basketRim.castShadow = true;
   basketRim.receiveShadow = true;
-  basketRim.visible = false;
   machine.add(basketRim);
 
   const innerRim = new THREE.Mesh(new THREE.TorusGeometry(1.58, 0.028, 10, 96, Math.PI), brass);
-  innerRim.position.set(0, 1.2, 0.68);
+  innerRim.position.set(0, 1.36, 0.42);
   innerRim.rotation.x = Math.PI * 0.54;
   innerRim.rotation.z = Math.PI;
   innerRim.castShadow = true;
-  innerRim.visible = false;
   machine.add(innerRim);
 
   for (let i = 0; i <= 48; i += 1) {
     const t = i / 48;
     const angle = Math.PI * (1 - t);
     const x = Math.cos(angle) * 2.03;
-    const z = 0.64 + Math.sin(angle) * 0.78;
+    const z = 0.38 + Math.sin(angle) * 0.62;
     const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.11, 0.16), agedSteel);
-    tooth.position.set(x, 1.27, z);
+    tooth.position.set(x, 1.39, z);
     tooth.rotation.y = -angle + Math.PI / 2;
     tooth.rotation.x = -0.22;
     tooth.castShadow = true;
-    tooth.visible = false;
     machine.add(tooth);
   }
 
@@ -681,13 +710,13 @@ function addReferenceBodyFill(machine, black, wornBlack, brass, darkRubber) {
 
 function addFullBodyShell(machine, black, wornBlack, brass, darkRubber) {
   const enamel = new THREE.MeshStandardMaterial({
-    color: 0x050504,
-    roughness: 0.26,
+    color: 0x0d1011,
+    roughness: 0.22,
     metalness: 0.82,
-    envMapIntensity: 0.78
+    envMapIntensity: 0.92
   });
   const innerShadow = new THREE.MeshStandardMaterial({
-    color: 0x090705,
+    color: 0x17130f,
     roughness: 0.7,
     metalness: 0.44
   });
@@ -1015,7 +1044,7 @@ function addPaper(machine) {
   geometry.computeVertexNormals();
 
   const paper = new THREE.Mesh(geometry, paperMaterial);
-  paper.position.set(0, 3.16, -0.55);
+  paper.position.set(0, paperMetrics.planeCenterY, -0.55);
   paper.castShadow = true;
   paper.receiveShadow = true;
   sceneState.paperMesh = paper;
@@ -1147,6 +1176,24 @@ function addCarriageDetails(brass, darkRubber, black) {
   );
   carriage.add(lowerGuideRail);
 
+  const rearBrandBoard = roundedBox(7.25, 0.5, 0.2, 0.1, black);
+  rearBrandBoard.position.set(0, 4.95, -0.84);
+  rearBrandBoard.castShadow = true;
+  rearBrandBoard.receiveShadow = true;
+  carriage.add(rearBrandBoard);
+
+  const rearWordmark = makeWordmarkLabel("TYPE", 2.45, 0.28);
+  rearWordmark.position.set(0, 4.96, -0.72);
+  carriage.add(rearWordmark);
+
+  const rearBrandRail = cylinderBetween(
+    new THREE.Vector3(-3.48, 4.72, -0.72),
+    new THREE.Vector3(3.48, 4.72, -0.72),
+    0.018,
+    brass
+  );
+  carriage.add(rearBrandRail);
+
   [-1, 1].forEach((side) => {
     const x = side * 4.28;
     const endPlate = roundedBox(0.34, 1.06, 0.78, 0.12, black);
@@ -1252,43 +1299,87 @@ function addRibbon(machine, black, brass, ribbonRed) {
   machine.add(ribbonBacker);
 }
 
+function addPrintPointGuide(machine, brass) {
+  const guideMaterial = new THREE.MeshStandardMaterial({
+    color: 0xbdb7aa,
+    roughness: 0.28,
+    metalness: 0.92,
+    emissive: 0x181714,
+    emissiveIntensity: 0.06
+  });
+  const target = getPrintHeadTarget();
+  const leftGuide = cylinderBetween(
+    new THREE.Vector3(-0.22, target.y - 0.18, target.z + 0.05),
+    new THREE.Vector3(-0.08, target.y + 0.18, target.z + 0.02),
+    0.012,
+    guideMaterial
+  );
+  const rightGuide = cylinderBetween(
+    new THREE.Vector3(0.22, target.y - 0.18, target.z + 0.05),
+    new THREE.Vector3(0.08, target.y + 0.18, target.z + 0.02),
+    0.012,
+    guideMaterial
+  );
+  const bridge = roundedBox(0.46, 0.035, 0.03, 0.012, guideMaterial);
+  bridge.position.set(0, target.y + 0.18, target.z + 0.03);
+  bridge.castShadow = true;
+  machine.add(leftGuide, rightGuide, bridge);
+
+  const flashMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd986,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false
+  });
+  const flash = new THREE.Mesh(new THREE.CircleGeometry(0.1, 28), flashMaterial);
+  flash.position.set(target.x, target.y + 0.02, target.z + 0.075);
+  flash.rotation.x = -0.08;
+  sceneState.impactFlashMesh = flash;
+  machine.add(flash);
+
+  const flashLight = new THREE.PointLight(0xffd986, 0, 1.6);
+  flashLight.position.set(target.x, target.y + 0.1, target.z + 0.16);
+  sceneState.impactFlashLight = flashLight;
+  machine.add(flashLight);
+}
+
 function addTypebars(machine, brass, black) {
   const agedSteel = new THREE.MeshStandardMaterial({
-    color: 0x958873,
-    roughness: 0.42,
-    metalness: 0.86
+    color: 0xb1aca1,
+    roughness: 0.34,
+    metalness: 0.9
   });
   const count = 31;
   for (let i = 0; i < count; i += 1) {
     const t = count === 1 ? 0 : i / (count - 1);
     const side = Math.abs(t - 0.5);
     const spread = (t - 0.5) * 3.96;
-    const start = new THREE.Vector3(spread, 0.84, 0.26 + side * 0.06);
+    const start = new THREE.Vector3(spread, 1.34, 0.36 + side * 0.05);
     const target = getPrintHeadTarget();
-    const rest = new THREE.Vector3(spread * 0.34, 1.06 + (0.5 - side) * 0.14, -0.18 + side * 0.08);
-    const rod = cylinderBetween(start, rest, 0.012, brass);
-    const slug = roundedBox(0.15, 0.11, 0.06, 0.016, black);
+    const rest = new THREE.Vector3(spread * 0.3, 1.6 + (0.5 - side) * 0.12, -0.16 + side * 0.07);
+    const rod = cylinderBetween(start, rest, 0.018, agedSteel);
+    const slug = roundedBox(0.2, 0.13, 0.075, 0.016, agedSteel);
     slug.position.copy(rest);
     slug.lookAt(getPrintSlugLookTarget(target));
-    const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.048, 14, 10), brass);
+    const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.048, 14, 10), agedSteel);
     hinge.position.copy(start);
     rod.visible = false;
     slug.visible = false;
     hinge.visible = false;
-    const arm = { start, rest, target, arcHeight: 0.44 + side * 0.12, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
+    const arm = { start, rest, target, arcHeight: 0.3 + side * 0.08, rod, slug, hinge, strikeStart: -Infinity, intensity: 0, phase: i / count };
     sceneState.typebars.push(arm);
     machine.add(rod, slug, hinge);
   }
 
   const basket = new THREE.Mesh(new THREE.TorusGeometry(2.06, 0.032, 12, 112, Math.PI), brass);
-  basket.position.set(0, 0.82, 0.3);
+  basket.position.set(0, 1.34, 0.36);
   basket.rotation.x = Math.PI * 0.5;
   basket.rotation.z = Math.PI;
   machine.add(basket);
 
   const hingeRail = cylinderBetween(
-    new THREE.Vector3(-2.02, 0.84, 0.26),
-    new THREE.Vector3(2.02, 0.84, 0.26),
+    new THREE.Vector3(-2.02, 1.34, 0.36),
+    new THREE.Vector3(2.02, 1.34, 0.36),
     0.026,
     brass
   );
@@ -1298,8 +1389,8 @@ function addTypebars(machine, brass, black) {
     const t = i / 32;
     const side = Math.abs(t - 0.5);
     const spread = (t - 0.5) * 3.82;
-    const start = new THREE.Vector3(spread, 0.82, 0.42 + side * 0.04);
-    const tip = new THREE.Vector3(spread * 0.18, 1.28 + (0.5 - side) * 0.16, -0.15 + side * 0.08);
+    const start = new THREE.Vector3(spread, 1.36, 0.4 + side * 0.04);
+    const tip = new THREE.Vector3(spread * 0.16, 1.78 + (0.5 - side) * 0.14, -0.2 + side * 0.07);
     const visibleBar = cylinderBetween(start, tip, i % 4 === 0 ? 0.011 : 0.008, agedSteel);
     visibleBar.castShadow = true;
     machine.add(visibleBar);
@@ -1318,34 +1409,6 @@ function addTypebars(machine, brass, black) {
   segmentCover.castShadow = true;
   segmentCover.receiveShadow = true;
   machine.add(segmentCover);
-}
-
-function addActiveHammer(machine, brass, black) {
-  const activeBrass = new THREE.MeshStandardMaterial({
-    color: 0xf0ba66,
-    roughness: 0.24,
-    metalness: 0.9,
-    emissive: 0x2f1a06,
-    emissiveIntensity: 0.18
-  });
-  const slugMaterial = new THREE.MeshStandardMaterial({
-    color: 0x090807,
-    roughness: 0.42,
-    metalness: 0.82
-  });
-  const group = new THREE.Group();
-  const leftRod = cylinderBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.1, 0), 0.025, activeBrass);
-  const rightRod = cylinderBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.1, 0), 0.025, activeBrass);
-  const centerRod = cylinderBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.1, 0), 0.014, brass);
-  const slug = roundedBox(0.36, 0.24, 0.15, 0.028, slugMaterial);
-  const face = roundedBox(0.24, 0.1, 0.03, 0.01, activeBrass);
-  const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.09, 18, 14), activeBrass);
-  face.position.z = -0.085;
-  slug.add(face);
-  group.add(leftRod, rightRod, centerRod, slug, hinge);
-  group.visible = false;
-  sceneState.strikeHammer = { group, leftRod, rightRod, centerRod, slug, hinge };
-  machine.add(group);
 }
 
 function addKeys(machine, black, brass) {
@@ -1890,6 +1953,36 @@ function makePlateLabel(text, width, height) {
   return new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
 }
 
+function makeWordmarkLabel(text, width, height) {
+  const wordmarkCanvas = document.createElement("canvas");
+  wordmarkCanvas.width = 1024;
+  wordmarkCanvas.height = 180;
+  const context = wordmarkCanvas.getContext("2d");
+  context.clearRect(0, 0, wordmarkCanvas.width, wordmarkCanvas.height);
+  context.fillStyle = "#ddb36d";
+  context.font = "700 108px Georgia, serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.shadowColor = "rgba(35, 22, 10, 0.7)";
+  context.shadowBlur = 2;
+  context.fillText(text, wordmarkCanvas.width / 2, wordmarkCanvas.height / 2 + 4);
+
+  const texture = new THREE.CanvasTexture(wordmarkCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 16;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    toneMapped: false,
+    depthWrite: false
+  });
+  const wordmark = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+  wordmark.renderOrder = 12;
+  return wordmark;
+}
+
 function makeScrewHead(radius, brass, black) {
   const group = new THREE.Group();
   const head = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 0.032, 28), brass);
@@ -2058,9 +2151,13 @@ function handleMachineBeforeInput(event) {
 
   if (inputType === "deleteContentBackward") {
     ensureAudio();
-    moveCarriage(-1);
-    strikeMachine("Backspace");
-    playThud();
+    if (typewriterState.realisticBackspace) {
+      moveCarriage(-1);
+      strikeMachine("Backspace");
+      playThud();
+    } else {
+      deletePreviousCharacter();
+    }
     return true;
   }
 
@@ -2146,9 +2243,13 @@ function typeIntoTypewriter(event) {
   }
 
   if (key === "Backspace") {
-    moveCarriage(-1);
-    strikeMachine("Backspace");
-    playThud();
+    if (typewriterState.realisticBackspace) {
+      moveCarriage(-1);
+      strikeMachine("Backspace");
+      playThud();
+    } else {
+      deletePreviousCharacter();
+    }
     return true;
   }
 
@@ -2248,6 +2349,7 @@ function printTypewriterCharacter(character) {
     const currentLine = lines[typewriterState.row].padEnd(column + 1, " ");
     lines[typewriterState.row] = `${currentLine.slice(0, column)} ${currentLine.slice(column + 1)}`;
     removeOverstrikesAt(typewriterState.row, column);
+    addCorrectionMark(typewriterState.row, column);
     typewriterState.correctionMode = false;
     setTemporaryStatus("Corrected");
     strikeMachine(character);
@@ -2293,6 +2395,28 @@ function removeOverstrikesAt(row, col) {
   typewriterState.overstrikes = typewriterState.overstrikes.filter((mark) => mark.row !== row || mark.col !== col);
 }
 
+function addCorrectionMark(row, col) {
+  typewriterState.corrections.push({
+    row,
+    col,
+    seed: row * 701 + col * 43 + typewriterState.corrections.length * 17,
+    revealAt: performance.now() + printHeadMetrics.strikeContactTime + 10
+  });
+}
+
+function removeCorrectionsAt(row, col) {
+  typewriterState.corrections = typewriterState.corrections.filter((mark) => mark.row !== row || mark.col !== col);
+}
+
+function shiftMarksAfterDelete(row, deletedColumn) {
+  typewriterState.overstrikes = typewriterState.overstrikes
+    .filter((mark) => mark.row !== row || mark.col !== deletedColumn)
+    .map((mark) => mark.row === row && mark.col > deletedColumn ? { ...mark, col: mark.col - 1 } : mark);
+  typewriterState.corrections = typewriterState.corrections
+    .filter((mark) => mark.row !== row || mark.col !== deletedColumn)
+    .map((mark) => mark.row === row && mark.col > deletedColumn ? { ...mark, col: mark.col - 1 } : mark);
+}
+
 function moveCarriage(delta) {
   const next = typewriterState.col + delta;
   if (next < typewriterState.leftMargin && !typewriterState.marginRelease) {
@@ -2306,6 +2430,29 @@ function moveCarriage(delta) {
   updateCarriage();
   setTemporaryStatus("Carriage moved");
   queueSaveState();
+}
+
+function deletePreviousCharacter() {
+  const lines = getPaperLines();
+  ensurePaperLine(lines, typewriterState.row);
+  const column = Math.max(0, Math.floor(typewriterState.col));
+  if (column <= typewriterState.leftMargin) {
+    setTemporaryStatus("Left margin");
+    strikeMachine("Backspace");
+    playThud();
+    return;
+  }
+
+  const deleteAt = column - 1;
+  const line = lines[typewriterState.row] || "";
+  lines[typewriterState.row] = `${line.slice(0, deleteAt)}${line.slice(deleteAt + 1)}`;
+  typewriterState.col = deleteAt;
+  shiftMarksAfterDelete(typewriterState.row, deleteAt);
+  typewriterState.lastBellColumn = -1;
+  strikeMachine("Backspace");
+  playThud();
+  writePaperLines(lines);
+  setTemporaryStatus("Deleted");
 }
 
 function gatePrintedCharacter(row, col) {
@@ -2465,7 +2612,6 @@ function strikeMachine(value) {
     if (primary) {
       primary.strikeStart = now;
       primary.intensity = 1;
-      sceneState.activeStrikeArm = primary;
       sceneState.lastStrike = now;
     }
   }
@@ -2474,13 +2620,14 @@ function strikeMachine(value) {
     sceneState.carriageHoldUntil = Math.max(sceneState.carriageHoldUntil, now + printHeadMetrics.escapementDelay);
     sceneState.paperImpactStart = now + printHeadMetrics.strikeContactTime;
     sceneState.ribbonStrikeStart = now;
+    sceneState.impactFlash = 0;
     window.setTimeout(drawPaper, printHeadMetrics.strikeContactTime + 24);
     window.setTimeout(() => playThud(), printHeadMetrics.strikeContactTime);
   } else {
     sceneState.paperImpact = 1;
   }
   sceneState.ribbonPulse = printableStrike ? 1 : Math.max(sceneState.ribbonPulse, 0.28);
-  sceneState.carriageJerk += normalized === "Enter" ? -0.34 : printableStrike ? 0.014 : 0.055;
+  sceneState.carriageJerk += normalized === "Enter" ? -0.34 : printableStrike ? 0.082 : 0.055;
 }
 
 function keyIndexForValue(value) {
@@ -2503,7 +2650,7 @@ function paperCanvasXToLocal(canvasX) {
 }
 
 function paperCanvasYToLocal(canvasY) {
-  return (canvasY / paperMetrics.canvasHeight - 0.5) * paperMetrics.planeHeight;
+  return (0.5 - canvasY / paperMetrics.canvasHeight) * paperMetrics.planeHeight;
 }
 
 function strikeCanvasX(column = currentColumn()) {
@@ -2515,7 +2662,11 @@ function strikeCanvasY() {
 }
 
 function getPrintHeadTarget() {
-  return new THREE.Vector3(0, printHeadMetrics.contactY, printHeadMetrics.contactZ);
+  return new THREE.Vector3(
+    0,
+    paperMetrics.planeCenterY + paperCanvasYToLocal(strikeCanvasY()),
+    printHeadMetrics.contactZ
+  );
 }
 
 function getPrintSlugLookTarget(target = getPrintHeadTarget()) {
@@ -2590,15 +2741,45 @@ function drawPaper() {
   const paperLines = input.value ? input.value.split(/\r?\n/) : [""];
   const now = performance.now();
   sceneState.printGates = sceneState.printGates.filter((gate) => now < gate.revealAt);
+  const drawCorrectionPatch = (x, y, seed, alpha = 0.86) => {
+    context.save();
+    context.translate(x + jitter(seed, 2.4), y + 7 + jitter(seed + 11, 1.8));
+    context.rotate((jitter(seed + 13, 0.7) * Math.PI) / 180);
+    context.fillStyle = "rgba(245, 238, 218, 0.86)";
+    context.globalAlpha = alpha;
+    roundedRectPath(context, -4, 0, paperMetrics.charPitch * 0.88, 42, 5);
+    context.fill();
+    context.strokeStyle = "rgba(118, 87, 52, 0.18)";
+    context.lineWidth = 1.2;
+    context.stroke();
+    context.globalAlpha = alpha * 0.45;
+    context.fillStyle = "rgba(255,255,255,0.72)";
+    for (let i = 0; i < 4; i += 1) {
+      context.fillRect(jitter(seed + i * 19, 16), 6 + i * 8 + jitter(seed + i * 23, 2), 18 + Math.abs(jitter(seed + i * 31, 8)), 1.2);
+    }
+    context.restore();
+  };
   const drawTypedMark = (char, x, y, seed, baseAlpha = 0.84) => {
     if (char === " ") {
       return;
     }
-    context.globalAlpha = baseAlpha + Math.abs(jitter(seed, 0.1));
+    const strength = 0.62 + Math.abs(jitter(seed + 5, 0.46));
+    const overHit = strength > 0.97;
+    const underHit = strength < 0.74;
+    context.globalAlpha = Math.max(0.42, Math.min(0.98, baseAlpha * strength));
+    context.fillStyle = sceneState.ink;
     context.save();
-    context.translate(x + jitter(seed, 0.85), y + jitter(seed + 17, 1.1));
-    context.rotate((jitter(seed + 29, 0.22) * Math.PI) / 180);
+    context.translate(x + jitter(seed, 1.75), y + jitter(seed + 17, 2.4));
+    context.rotate((jitter(seed + 29, 0.58) * Math.PI) / 180);
     context.fillText(char, 0, 0);
+    if (overHit) {
+      context.globalAlpha *= 0.34;
+      context.fillText(char, jitter(seed + 41, 1.4), jitter(seed + 53, 1.2));
+    }
+    if (!underHit) {
+      context.globalAlpha *= 0.22;
+      context.fillRect(5 + jitter(seed + 67, 8), 36 + jitter(seed + 71, 5), 2 + Math.abs(jitter(seed + 73, 4)), 1.2);
+    }
     context.restore();
   };
   const firstVisibleLine = Math.max(0, typewriterState.row - 8);
@@ -2610,12 +2791,18 @@ function drawPaper() {
     if (y < -paperMetrics.lineHeight || y > height) {
       continue;
     }
+    typewriterState.corrections
+      .filter((mark) => mark.row === lineIndex && now >= mark.revealAt)
+      .forEach((mark) => {
+        const markX = paperMetrics.marginX + mark.col * paperMetrics.charPitch;
+        drawCorrectionPatch(markX, y, mark.seed);
+      });
     [...line].forEach((char, charIndex) => {
       if (sceneState.printGates.some((gate) => gate.row === lineIndex && gate.col === charIndex)) {
         x += paperMetrics.charPitch;
         return;
       }
-      drawTypedMark(char, x, y, charIndex + lineIndex * 31);
+      drawTypedMark(char, x, y, charIndex + lineIndex * 31 + char.charCodeAt(0) * 7);
       x += paperMetrics.charPitch;
     });
     typewriterState.overstrikes
@@ -2630,7 +2817,15 @@ function drawPaper() {
   if ((document.activeElement === input || input.value) && performance.now() >= sceneState.carriageHoldUntil) {
     const caretX = strikeCanvasX(typewriterState.col) - 3.5;
     const caretY = strikeCanvasY() - 28;
-    context.fillRect(caretX, caretY, 7, 56);
+    context.strokeStyle = "rgba(126, 83, 34, 0.56)";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(caretX - 10, caretY + 4);
+    context.lineTo(caretX + 3.5, caretY - 10);
+    context.lineTo(caretX + 17, caretY + 4);
+    context.stroke();
+    context.fillStyle = "rgba(165, 112, 48, 0.5)";
+    context.fillRect(caretX - 13, caretY + 55, 33, 2);
   }
   context.restore();
 
@@ -2703,64 +2898,22 @@ function ribbonLiftForStrike(elapsed) {
   return Math.max(0, 1 - easeInCubic((elapsed - printHeadMetrics.strikeContactTime) / (fallEnd - printHeadMetrics.strikeContactTime)));
 }
 
-function updateActiveHammer(state, now) {
-  const hammer = state.strikeHammer;
-  const arm = state.activeStrikeArm;
-  if (!hammer || !arm) {
-    return;
-  }
-
-  const elapsed = now - arm.strikeStart;
-  const lift = typebarLift(elapsed, arm.intensity);
-  if (lift <= 0) {
-    hammer.group.visible = false;
-    return;
-  }
-
-  const impact = typebarImpact(elapsed, arm.intensity);
-  const end = typebarTipPosition(arm, lift);
-  end.y += impact * 0.035;
-  end.z += impact * 0.038;
-  const sideOffset = strikeBarSideOffset(arm.start, end, 0.055);
-  const sideEndOffset = sideOffset.clone().multiplyScalar(0.36);
-  const leftStart = arm.start.clone().add(sideOffset);
-  const rightStart = arm.start.clone().sub(sideOffset);
-  const leftEnd = end.clone().add(sideEndOffset);
-  const rightEnd = end.clone().sub(sideEndOffset);
-  hammer.group.visible = true;
-  hammer.hinge.position.copy(arm.start);
-  updateCylinderBetween(hammer.leftRod, leftStart, leftEnd);
-  updateCylinderBetween(hammer.rightRod, rightStart, rightEnd);
-  updateCylinderBetween(hammer.centerRod, arm.start, end);
-  hammer.slug.position.copy(end);
-  hammer.slug.scale.set(1 + impact * 0.2, 1 + impact * 0.12, 1 + impact * 0.08);
-  hammer.slug.lookAt(getPrintSlugLookTarget(arm.target));
-}
-
-function strikeBarSideOffset(start, end, width) {
-  const direction = new THREE.Vector3().subVectors(end, start).normalize();
-  const facing = new THREE.Vector3(0, 0, 1);
-  const side = new THREE.Vector3().crossVectors(direction, facing);
-  if (side.lengthSq() < 0.001) {
-    side.set(1, 0, 0);
-  }
-  return side.normalize().multiplyScalar(width);
-}
-
 function animate() {
   requestAnimationFrame(animate);
   const state = sceneState;
   const now = performance.now();
 
   if (now >= state.carriageHoldUntil) {
-    state.carriageShift += (state.targetCarriageShift - state.carriageShift) * 0.16;
+    state.carriageShift += (state.targetCarriageShift - state.carriageShift) * (state.focusMode ? 0.28 : 0.22);
   }
   state.carriageJerk *= 0.72;
   if (state.paperImpactStart && now >= state.paperImpactStart) {
     state.paperImpact = Math.max(state.paperImpact, 1);
+    state.impactFlash = 1;
     state.paperImpactStart = 0;
   }
   state.paperImpact *= 0.72;
+  state.impactFlash *= 0.58;
   state.ribbonPulse *= 0.68;
   state.returnSweep *= 0.82;
   state.shiftLift *= 0.76;
@@ -2816,12 +2969,10 @@ function animate() {
     arm.slug.scale.set(1 + impact * 0.22, 1 + impact * 0.12, 1 + impact * 0.08);
     arm.slug.lookAt(getPrintSlugLookTarget(arm.target));
   });
-  updateActiveHammer(state, now);
-
   if (state.paperMesh) {
     state.paperAngle += (state.targetPaperAngle - state.paperAngle) * 0.16;
     state.paperMesh.position.z = -0.55 + state.paperImpact * 0.035;
-    state.paperMesh.position.y = 3.16 + state.returnSweep * 0.045;
+    state.paperMesh.position.y = paperMetrics.planeCenterY + state.returnSweep * 0.045;
     state.paperMesh.rotation.z = state.paperAngle;
   }
 
@@ -2831,9 +2982,19 @@ function animate() {
     if (now - state.ribbonStrikeStart > printHeadMetrics.strikeDuration) {
       state.ribbonStrikeStart = -Infinity;
     }
-    const lift = Math.max(strikeRibbonLift, Math.min(1, state.ribbonPulse * 0.42));
+    const lift = Math.max(strikeRibbonLift, Math.min(1, state.ribbonPulse * 0.52));
     state.ribbonGuide.position.y = printHeadMetrics.ribbonRestY + (printTarget.y - 0.02 - printHeadMetrics.ribbonRestY) * lift;
     state.ribbonGuide.position.z = printHeadMetrics.ribbonRestZ + (printTarget.z + 0.04 - printHeadMetrics.ribbonRestZ) * lift;
+  }
+
+  if (state.impactFlashMesh) {
+    const flash = Math.max(state.impactFlash, state.paperImpact * 0.22);
+    state.impactFlashMesh.material.opacity = Math.min(0.46, flash * 0.46);
+    state.impactFlashMesh.scale.setScalar(1 + flash * 0.34);
+  }
+
+  if (state.impactFlashLight) {
+    state.impactFlashLight.intensity = Math.min(0.9, state.impactFlash * 0.9);
   }
 
   if (state.camera) {
@@ -2996,7 +3157,7 @@ function downloadPdf(pdf) {
   link.remove();
 
   if (objectUrl && typeof URL.revokeObjectURL === "function") {
-    URL.revokeObjectURL(objectUrl);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
   }
 }
 
@@ -3062,6 +3223,7 @@ function restoreState() {
   typewriterState.rollOffset = Number.isFinite(saved.rollOffset) ? Math.max(-paperMetrics.lineHeight * 6, Math.min(paperMetrics.lineHeight * 6, saved.rollOffset)) : 0;
   typewriterState.marginRelease = false;
   typewriterState.correctionMode = false;
+  typewriterState.realisticBackspace = saved.realisticBackspace !== false;
   typewriterState.overstrikes = Array.isArray(saved.overstrikes)
     ? saved.overstrikes
       .filter((mark) => Number.isFinite(mark.row) && Number.isFinite(mark.col) && typeof mark.character === "string" && mark.character.length === 1)
@@ -3073,7 +3235,18 @@ function restoreState() {
         revealAt: 0
       }))
     : [];
+  typewriterState.corrections = Array.isArray(saved.corrections)
+    ? saved.corrections
+      .filter((mark) => Number.isFinite(mark.row) && Number.isFinite(mark.col))
+      .map((mark, index) => ({
+        row: Math.max(0, Math.floor(mark.row)),
+        col: Math.max(0, Math.floor(mark.col)),
+        seed: Number.isFinite(mark.seed) ? mark.seed : index * 109,
+        revealAt: 0
+      }))
+    : [];
   typewriterState.lastBellColumn = -1;
+  updateBackspaceModeButton();
 
   soundEnabled = saved.soundEnabled !== false;
   updateSoundButtons();
@@ -3135,6 +3308,8 @@ function saveStateNow() {
       rightMargin: typewriterState.rightMargin,
       rollOffset: typewriterState.rollOffset,
       overstrikes: typewriterState.overstrikes.map(({ row, col, character, seed }) => ({ row, col, character, seed })),
+      corrections: typewriterState.corrections.map(({ row, col, seed }) => ({ row, col, seed })),
+      realisticBackspace: typewriterState.realisticBackspace,
       ink: sceneState.ink,
       paperTone: sceneState.paperTone,
       paperAngle: sceneState.targetPaperAngle,
@@ -3162,6 +3337,7 @@ function clearPage() {
   typewriterState.rollOffset = 0;
   typewriterState.correctionMode = false;
   typewriterState.overstrikes = [];
+  typewriterState.corrections = [];
   resetMargins();
   sceneState.zoom = 1;
   sceneState.focusMode = false;
@@ -3213,6 +3389,8 @@ function applyWhiteout() {
   lines[typewriterState.row] = line.padEnd(column + 1, " ");
   lines[typewriterState.row] = `${lines[typewriterState.row].slice(0, column)} ${lines[typewriterState.row].slice(column + 1)}`;
   removeOverstrikesAt(typewriterState.row, column);
+  removeCorrectionsAt(typewriterState.row, column);
+  addCorrectionMark(typewriterState.row, column);
   typewriterState.col = column + 1;
   writePaperLines(lines);
   input.focus({ preventScroll: true });
@@ -3250,6 +3428,106 @@ function updateFocusButton() {
   focusButton?.setAttribute("aria-pressed", String(sceneState.focusMode));
   if (focusLabel) {
     focusLabel.textContent = sceneState.focusMode ? "Full view" : "Focus";
+  }
+}
+
+function toggleRealisticBackspace() {
+  typewriterState.realisticBackspace = !typewriterState.realisticBackspace;
+  updateBackspaceModeButton();
+  input.focus({ preventScroll: true });
+  setTemporaryStatus(typewriterState.realisticBackspace ? "Backspace moves" : "Backspace deletes", 1100);
+  strikeMachine("Backspace");
+  playKey(0.06);
+  queueSaveState();
+}
+
+function updateBackspaceModeButton() {
+  realisticBackspaceButton?.setAttribute("aria-pressed", String(typewriterState.realisticBackspace));
+  if (realisticBackspaceLabel) {
+    realisticBackspaceLabel.textContent = `Realistic Backspace: ${typewriterState.realisticBackspace ? "On" : "Off"}`;
+  }
+}
+
+function hydrateTooltips() {
+  tooltipButtons.forEach((button) => {
+    if (button.dataset.tooltip) {
+      button.title = button.dataset.tooltip;
+    }
+    const label = button.querySelector("span")?.textContent?.trim();
+    const shortcut = button.querySelector("kbd")?.textContent?.trim();
+    if (label) {
+      button.setAttribute("aria-label", shortcut ? `${label}, shortcut ${shortcut}` : label);
+    }
+  });
+}
+
+function applyInitialShortcutLayout() {
+  if (window.matchMedia?.("(max-width: 760px)").matches) {
+    setSidebarExpanded(false, { focus: false, persist: false });
+  }
+}
+
+function toggleMobileKeyboard() {
+  const open = !document.body.classList.contains("mobile-keyboard-open");
+  document.body.classList.toggle("mobile-keyboard-open", open);
+  mobileKeyboardToggle?.setAttribute("aria-expanded", String(open));
+  const peek = sidebarToggleButtons.find((button) => button.classList.contains("rail-peek"));
+  if (peek) {
+    const shouldShow = !open && document.body.classList.contains("controls-hidden");
+    peek.hidden = !shouldShow;
+    peek.setAttribute("aria-hidden", String(!shouldShow));
+    peek.tabIndex = shouldShow ? 0 : -1;
+  }
+  input.focus({ preventScroll: true });
+}
+
+function handleMobileKey(key) {
+  input.focus({ preventScroll: true });
+  dismissIntroHint();
+  ensureAudio();
+  if (key === "Backspace") {
+    if (typewriterState.realisticBackspace) {
+      moveCarriage(-1);
+      strikeMachine("Backspace");
+      playThud();
+    } else {
+      deletePreviousCharacter();
+    }
+    return;
+  }
+  if (key === "Enter") {
+    returnCarriage();
+    return;
+  }
+  if (key) {
+    printTypewriterCharacter(key);
+  }
+}
+
+function restoreIntroHint() {
+  if (!introHint) {
+    return;
+  }
+  try {
+    if (window.localStorage.getItem(introStorageKey) === "1") {
+      document.body.classList.add("intro-dismissed");
+      introHint.setAttribute("aria-hidden", "true");
+    }
+  } catch {
+    // Local storage is optional; the hint can still fade for this session.
+  }
+}
+
+function dismissIntroHint() {
+  if (!introHint || document.body.classList.contains("intro-dismissed")) {
+    return;
+  }
+  document.body.classList.add("intro-dismissed");
+  introHint.setAttribute("aria-hidden", "true");
+  try {
+    window.localStorage.setItem(introStorageKey, "1");
+  } catch {
+    // Ignore storage errors; the visual dismissal already happened.
   }
 }
 
@@ -3291,11 +3569,24 @@ function saveAsImage() {
 
 function setSidebarExpanded(expanded, options = {}) {
   document.body.classList.toggle("controls-hidden", !expanded);
+  if (commandRail) {
+    commandRail.hidden = !expanded;
+    commandRail.setAttribute("aria-hidden", String(!expanded));
+    commandRail.inert = !expanded;
+  }
   sidebarToggleButtons.forEach((button) => {
+    const isPeek = button.classList.contains("rail-peek");
     button.setAttribute("aria-expanded", String(expanded));
+    if (isPeek) {
+      button.hidden = expanded;
+      button.setAttribute("aria-hidden", String(expanded));
+      button.tabIndex = expanded ? -1 : 0;
+    }
     const label = button.querySelector("[data-sidebar-label]");
     if (label) {
-      label.textContent = expanded ? "Hide shortcuts" : "Show shortcuts";
+      label.textContent = expanded
+        ? (isPeek ? "Shortcuts" : "Hide")
+        : "Shortcuts";
     }
   });
   resizeScene();

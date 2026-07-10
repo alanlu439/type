@@ -9,7 +9,7 @@
     />
     <title>Type - 3D Typewriter Simulator</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260710-5" />
   </head>
   <body>
     <main class="type-app" aria-labelledby="app-title">
@@ -63,51 +63,69 @@
           <button class="swatch paper-swatch" type="button" data-paper="mist" style="--swatch: #d8d4c9" aria-label="Mist paper" aria-pressed="false"></button>
         </div>
 
-        <button class="control-button export-button" type="button" data-export-pdf>
+        <button class="control-button export-button" type="button" data-export-pdf aria-label="Export PDF" title="Export PDF">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7 3.8h7l3 3v13.4H7z"></path>
             <path d="M14 3.8v4h4"></path>
             <path d="M12 10.5v5"></path>
             <path d="m9.8 13.4 2.2 2.2 2.2-2.2"></path>
           </svg>
-          <span>PDF</span>
+          <span>Export PDF</span>
         </button>
       </header>
 
-      <aside class="command-rail" data-command-rail aria-label="Typewriter shortcuts">
+      <aside class="command-rail" data-command-rail aria-label="Typewriter shortcuts" aria-hidden="false">
+        <div class="rail-header">
+          <strong>Shortcuts</strong>
+          <button
+            class="rail-mode"
+            type="button"
+            data-realistic-backspace
+            aria-pressed="true"
+            title="When on, Backspace moves the carriage without erasing ink."
+          >
+            <span data-backspace-label>Realistic Backspace: On</span>
+          </button>
+          <button class="rail-collapse" type="button" data-sidebar-toggle aria-expanded="true" title="Hide the shortcut panel.">
+            <span data-sidebar-label>Hide</span>
+          </button>
+        </div>
         <div class="rail-actions" aria-label="Typewriter controls">
-          <button class="rail-command" type="button" data-ribbon-cycle>
+          <button class="rail-command" type="button" data-ribbon-cycle data-tooltip="Cycle the ribbon between black and burgundy ink.">
             <span>Change ribbon</span><kbd>F1</kbd>
           </button>
-          <button class="rail-command" type="button" data-margin-release>
+          <button class="rail-command" type="button" data-margin-release data-tooltip="Temporarily type beyond the left or right margin.">
             <span>Margin release</span><kbd>Alt</kbd>
           </button>
-          <button class="rail-command" type="button" data-correction-ribbon>
+          <button class="rail-command" type="button" data-correction-ribbon data-tooltip="Lift the correction ribbon and leave a rough white patch.">
             <span>Correction ribbon</span><kbd>Del</kbd>
           </button>
-          <button class="rail-command" type="button" data-tab-stop>
+          <button class="rail-command" type="button" data-tab-stop data-tooltip="Move the carriage to the next tab stop.">
             <span>Tab stop</span><kbd>Tab</kbd>
           </button>
-          <button class="rail-command" type="button" data-left-margin>
+          <button class="rail-command" type="button" data-left-margin data-tooltip="Set the left margin at the current carriage position.">
             <span>Set left margin</span><kbd>F3</kbd>
           </button>
-          <button class="rail-command" type="button" data-right-margin>
+          <button class="rail-command" type="button" data-right-margin data-tooltip="Set the right margin at the current carriage position.">
             <span>Set right margin</span><kbd>F4</kbd>
           </button>
-          <button class="rail-command" type="button" data-paper-up>
+          <button class="rail-command" type="button" data-paper-up data-tooltip="Roll the paper upward through the platen.">
             <span>Paper up</span><kbd>PgUp</kbd>
           </button>
-          <button class="rail-command" type="button" data-paper-down>
+          <button class="rail-command" type="button" data-paper-down data-tooltip="Roll the paper downward through the platen.">
             <span>Paper down</span><kbd>PgDn</kbd>
           </button>
-          <button class="rail-command" type="button" data-carriage-return>
+          <button class="rail-command" type="button" data-carriage-return data-tooltip="Return the carriage and advance to the next line. Cmd/Ctrl + Enter also works.">
             <span>Carriage return</span><kbd>Enter</kbd>
           </button>
-          <button class="rail-command" type="button" data-clear-page>
+          <button class="rail-command" type="button" data-clear-page data-tooltip="Start over with a fresh sheet.">
             <span>New sheet</span><kbd>F10</kbd>
           </button>
         </div>
       </aside>
+      <button class="rail-peek" type="button" data-sidebar-toggle aria-expanded="false" aria-hidden="true" hidden>
+        <span data-sidebar-label>Shortcuts</span>
+      </button>
 
       <section class="scene-stage" aria-label="3D typewriter simulator" data-stage>
         <canvas class="typewriter-canvas" data-scene aria-hidden="true"></canvas>
@@ -120,10 +138,56 @@
           autocapitalize="sentences"
           aria-label="Type your page"
         ></textarea>
+        <div class="intro-hint" data-intro-hint role="status" aria-hidden="false">
+          <span>Click anywhere and start typing.</span>
+        </div>
+        <div class="mobile-assist" data-mobile-assist>
+          <span>Best experienced with a physical keyboard.</span>
+          <button type="button" data-mobile-keyboard-toggle aria-expanded="false">On-screen keys</button>
+        </div>
+        <div class="mobile-keyboard" data-mobile-keyboard aria-label="On-screen typewriter keyboard">
+          <div class="mobile-key-row">
+            <button type="button" data-mobile-key="q">Q</button>
+            <button type="button" data-mobile-key="w">W</button>
+            <button type="button" data-mobile-key="e">E</button>
+            <button type="button" data-mobile-key="r">R</button>
+            <button type="button" data-mobile-key="t">T</button>
+            <button type="button" data-mobile-key="y">Y</button>
+            <button type="button" data-mobile-key="u">U</button>
+            <button type="button" data-mobile-key="i">I</button>
+            <button type="button" data-mobile-key="o">O</button>
+            <button type="button" data-mobile-key="p">P</button>
+          </div>
+          <div class="mobile-key-row">
+            <button type="button" data-mobile-key="a">A</button>
+            <button type="button" data-mobile-key="s">S</button>
+            <button type="button" data-mobile-key="d">D</button>
+            <button type="button" data-mobile-key="f">F</button>
+            <button type="button" data-mobile-key="g">G</button>
+            <button type="button" data-mobile-key="h">H</button>
+            <button type="button" data-mobile-key="j">J</button>
+            <button type="button" data-mobile-key="k">K</button>
+            <button type="button" data-mobile-key="l">L</button>
+          </div>
+          <div class="mobile-key-row">
+            <button type="button" data-mobile-key="Backspace">Back</button>
+            <button type="button" data-mobile-key="z">Z</button>
+            <button type="button" data-mobile-key="x">X</button>
+            <button type="button" data-mobile-key="c">C</button>
+            <button type="button" data-mobile-key="v">V</button>
+            <button type="button" data-mobile-key="b">B</button>
+            <button type="button" data-mobile-key="n">N</button>
+            <button type="button" data-mobile-key="m">M</button>
+            <button type="button" data-mobile-key="Enter">Return</button>
+          </div>
+          <div class="mobile-key-row">
+            <button class="mobile-space" type="button" data-mobile-key=" ">Space</button>
+          </div>
+        </div>
         <div class="sr-only" data-output aria-live="polite"></div>
       </section>
     </main>
 
-    <script type="module" src="script.js"></script>
+    <script type="module" src="script.js?v=20260710-5"></script>
   </body>
 </html>
